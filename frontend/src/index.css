@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-slate-900 text-slate-100 font-sans transition-colors duration-200;
+  }
+  .dark body {
+    @apply bg-slate-950 text-slate-100;
+  }
+  body:not(.dark) {
+    @apply bg-slate-50 text-slate-800;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(100, 116, 139, 0.4);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+
+/* HOTFIX: Overrides para Modo Claro nas classes hardcoded */
+body:not(.dark) .bg-slate-900 { background-color: #ffffff; border-color: #e2e8f0; }
+body:not(.dark) .bg-slate-950 { background-color: #f8fafc; }
+body:not(.dark) .bg-slate-800 { background-color: #f1f5f9; border-color: #e2e8f0; }
+body:not(.dark) .text-slate-100 { color: #0f172a; }
+body:not(.dark) .text-slate-200 { color: #1e293b; }
+body:not(.dark) .text-slate-300 { color: #334155; }
+body:not(.dark) .text-slate-400 { color: #475569; }
+body:not(.dark) .border-slate-800, body:not(.dark) .border-slate-700 { border-color: #cbd5e1; }
