@@ -9,3 +9,6 @@ uploads/
 
 backend/uploads/
 .venv/
+
+# Web-IFC WASM (copied by frontend postinstall)
+frontend/public/*.wasm
