@@ -204,10 +204,8 @@
       } else if (!p.ifc || (ifcModel && ifcModel.name !== p.ifc.name)) {
         ifcModel = null; ifcElements = [];
       }
-      if (false) {
-        notifyUser("Metadados e vínculos IFC importados. Para reabrir a geometria, importe novamente o arquivo IFC original.");
-      }
-      persistProject(); persistExt(); baseSave(); refreshProjectSelect(); baseRender();
+      if (p.ifc && !p.ifc.elements) notifyUser("Vínculos IFC importados. Reimporte o arquivo IFC original para abrir a geometria e o inventário completo.");
+      persistProject(); persistExt(); baseSave(); refreshProjectSelect(); render();
     } catch (error) { notifyUser("Falha ao abrir projeto: " + error.message); }
   }
   document.addEventListener("click", e => {
@@ -222,7 +220,7 @@
       projectStore = projectStore.filter(p => p.id !== ext.projectId); localStorage.setItem(PROJECTS_KEY, JSON.stringify(projectStore));
       notifyUser("Projeto removido da lista local. O projeto modelo será carregado.");
       ext.projectId = "ADM-001"; ext.projectName = "Edifício Administrativo BIMOFFICE"; ext.projectCode = "ADM-001";
-      state.activities = seed.map(a => ({...a})); state.audit = seedAudit.slice(); persistExt(); save(); refreshProjectSelect(); baseRender();
+      state.activities = seed.map(a => ({...a})); state.audit = seedAudit.slice(); persistExt(); save(); refreshProjectSelect(); render();
     }
   });
   document.addEventListener("change", e => {
@@ -435,9 +433,10 @@
 
   const originalParse = baseParseIfc;
   parseIfc = async function(file) {
+    const previousModel = ifcModel;
     const previous = ifcModel && ifcElements.length ? { name:ifcModel.name, schema:ifcModel.schema, guids:ifcElements.map(e=>e.guid), uploadedAt:ifcModel.uploadedAt } : null;
     await originalParse(file);
-    if (ifcModel && ifcModel.name === file.name) {
+    if (ifcModel && ifcModel !== previousModel && ifcModel.name === file.name) {
       if(previous) {
         const versionId="version-"+(previous.uploadedAt || Date.now());
         try { await ifcDBPut({id:versionId,name:previous.name,schema:previous.schema,uploadedAt:previous.uploadedAt,guids:previous.guids}); } catch(e) { console.warn("Não foi possível arquivar a versão IFC anterior",e); }
