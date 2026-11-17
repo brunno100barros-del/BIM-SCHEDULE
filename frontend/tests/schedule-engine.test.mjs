@@ -39,8 +39,8 @@ function extractFunction(name) {
   throw new Error(`Bloco da função ${name} não foi fechado`);
 }
 
-const functions = ["relationsFor", "edgeWeight", "buildNetwork", "calculateCpm"].map(extractFunction).join("\n");
-const engine = new Function(`${functions}; return { buildNetwork, calculateCpm };`)();
+const functions = ["relationsFor", "edgeWeight", "buildNetwork", "calculateCpm", "calculateEarnedValue"].map(extractFunction).join("\n");
+const engine = new Function(`${functions}; return { buildNetwork, calculateCpm, calculateEarnedValue };`)();
 
 function activity(id, duration, relations = []) {
   return { id, code: `A${id}`, name: `Atividade ${id}`, duration, relations, preds: [] };
@@ -100,4 +100,27 @@ test("CPM rejeita ciclos, predecessoras ausentes e durações inválidas", () =>
   ]), /ciclo/i);
   assert.throws(() => engine.calculateCpm([activity(1, 2, [{ predecessorId: 99, type: "FS" }])]), /inexistente/i);
   assert.throws(() => engine.calculateCpm([activity(1, 0)]), /maior que zero/i);
+});
+
+test("valor agregado calcula PV conforme à data de status e custo real", () => {
+  const result = engine.calculateEarnedValue([
+    { id: 1, cost: 100, duration: 10, start: 0, progress: 50 },
+    { id: 2, cost: 200, duration: 5, start: 5, progress: 0 }
+  ], { 1: 60 }, 5);
+  assert.equal(result.bac, 300);
+  assert.equal(result.pv, 50);
+  assert.equal(result.ev, 50);
+  assert.equal(result.ac, 60);
+  assert.equal(result.spi, 1);
+  assert.equal(result.cpi, 50 / 60);
+  assert.equal(result.eac, 360);
+});
+
+test("valor planejado chega ao orçamento base no término do cronograma", () => {
+  const result = engine.calculateEarnedValue([
+    { id: 1, cost: 100, duration: 10, start: 0, progress: 100 },
+    { id: 2, cost: 200, duration: 5, start: 5, progress: 100 }
+  ], {}, 10);
+  assert.equal(result.pv, 300);
+  assert.equal(result.bac, 300);
 });
