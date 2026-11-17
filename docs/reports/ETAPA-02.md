@@ -136,13 +136,18 @@ Todos os testes abaixo foram **executados**. Os resultados são os observados.
 | Conjunto | Ambiente | Resultado |
 |---|---|---|
 | Backend (pytest) | Linux, Python 3.13 (local) | **68 aprovados** (após a revisão; eram 62) |
-| Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12 | Aguardando a execução do CI desta revisão (antes: 62/62) |
-| Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | Aguardando a execução do CI desta revisão (antes: 62/62) |
+| Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12.16 | **68 aprovados** (execução 44175636745, commit `27becbf`) |
+| Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | **68 aprovados** (execução 44175636745, commit `27becbf`; valida `spawn`, caminhos e reinício do serviço no Windows) |
 | Frontend unitários (Vitest) | local e CI | **12 aprovados** |
 | Motor da demonstração (node:test) | local e CI | **9 aprovados** |
-| Ponta a ponta (Playwright, Chromium) | local e CI | **8 aprovados** |
+| Ponta a ponta (Playwright, Chromium) | local e CI | **8 aprovados** (CI: execução 44175636745) |
 | Type check + build de produção | local e CI | Aprovado |
 | `npm ci` a partir do lockfile | local e CI | Aprovado |
+
+Histórico do CI durante a revisão do PR #5:
+- `1b7138d` falhou (Ubuntu): ordem `failed` → `abort_hook`. Corrigido.
+- `f64018c` falhou (Windows): bloqueio do SQLite no parser IFC. Corrigido.
+- `27becbf` passou nos três jobs: backend Ubuntu e Windows, e frontend com unitários, build e e2e. Execuções 44175636745 (pull_request) e 44175624093 (push).
 
 Composição dos 68 testes do backend: 20 anteriores (CPM, API, banco) e 48 novos (42 da entrega inicial e 6 da revisão do PR #5).
 - **Tarefas:** progresso; API responsiva durante a tarefa; cancelamento cooperativo; encerramento forçado de tarefa que não responde; falha; morte do processo; cancelamento na fila; desligamento do serviço; recuperação de tarefas interrompidas.
