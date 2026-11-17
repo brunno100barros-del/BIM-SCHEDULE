@@ -272,6 +272,31 @@
     } catch (error) { ifcModel = null; ifcElements = []; notifyUser("Projeto aberto, mas não foi possível recuperar o IFC: " + error.message); }
     persistExt(); baseSave(); refreshProjectSelect(); render();
   }
+  async function deleteCurrentProject() {
+    const deletedId = ext.projectId;
+    projectStore = projectStore.filter(p => p.id !== deletedId);
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projectStore));
+    ifcDBDeleteById("project:" + deletedId).catch(error => console.warn("Falha ao excluir IFC do projeto:", error));
+    ifcDBDelete().catch(error => console.warn("Falha ao limpar IFC ativo:", error));
+    const fallback = projectStore.find(p => p.id === "ADM-001");
+    if (fallback) {
+      state.activities = JSON.parse(JSON.stringify(fallback.activities || seed));
+      state.audit = JSON.parse(JSON.stringify(fallback.audit || seedAudit));
+      applyExt(fallback.ext || defaults);
+      ext.projectId = "ADM-001"; ext.projectName = fallback.name || defaults.projectName; ext.projectCode = fallback.code || "ADM-001";
+      try {
+        const saved = await ifcDBGetById("project:ADM-001");
+        if (saved && Array.isArray(saved.elements)) { ifcModel = saved; ifcElements = saved.elements; }
+        else if (fallback.ifc) { ifcElements = Array.isArray(fallback.ifc.elements) ? fallback.ifc.elements : []; ifcModel = { id:"active",name:fallback.ifc.name,schema:fallback.ifc.schema,uploadedAt:fallback.ifc.uploadedAt,elements:ifcElements,mappings:fallback.ifc.mappings||{},file:null }; }
+        else { ifcModel = null; ifcElements = []; }
+      } catch (error) { ifcModel = null; ifcElements = []; console.warn(error); }
+    } else {
+      applyExt(defaults); ext.projectId = "ADM-001"; ext.projectName = defaults.projectName; ext.projectCode = "ADM-001";
+      state.activities = seed.map(a => ({...a})); state.audit = seedAudit.slice(); ifcModel = null; ifcElements = [];
+    }
+    persistExt(); save(); refreshProjectSelect(); render();
+    notifyUser("Projeto excluído. O projeto modelo foi restaurado sem apagar os demais projetos locais.");
+  }
   function exportProject() {
     const payload = projectPayload(true);
     downloadText((payload.code || "BIM-SCHEDULE") + ".json", JSON.stringify(payload, null, 2), "application/json");
@@ -308,15 +333,7 @@
     if (action === "import") document.getElementById("project-file")?.click();
     if (action === "delete") {
       if (!confirm("Excluir o projeto local atual? Esta ação não pode ser desfeita.")) return;
-      const deletedProjectId = ext.projectId;
-      projectStore = projectStore.filter(p => p.id !== deletedProjectId); localStorage.setItem(PROJECTS_KEY, JSON.stringify(projectStore));
-      ifcDBDeleteById("project:" + deletedProjectId).catch(error => console.warn("Falha ao excluir o IFC do projeto:", error));
-      ifcDBDelete().catch(error => console.warn("Falha ao limpar o IFC ativo:", error));
-      ifcModel = null; ifcElements = [];
-      notifyUser("Projeto removido da lista local. O projeto modelo será carregado.");
-      applyExt(defaults);
-      ext.projectId = "ADM-001"; ext.projectName = "Edifício Administrativo BIMOFFICE"; ext.projectCode = "ADM-001";
-      state.activities = seed.map(a => ({...a})); state.audit = seedAudit.slice(); persistExt(); save(); refreshProjectSelect(); render();
+      deleteCurrentProject();
     }
   });
   document.addEventListener("change", e => {
