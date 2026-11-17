@@ -4,14 +4,15 @@
 
 O comando `npm run test:schedule` executa testes Node nativos sobre as funções CPM efetivamente usadas pela interface e verifica os vínculos entre os módulos e a página demonstrativa.
 
-Casos cobertos:
+**9 testes automatizados** cobrem os seguintes casos:
 - Sequência FS e caminho crítico.
+- PV/EV/AC/SPI/CPI/EAC com data de status e encerramento do cronograma.
 - Atividades paralelas e folga total.
 - Relações SS, FF e SF.
 - Relações múltiplas entre o mesmo par de atividades.
 - Lag negativo.
 - Rejeição de ciclos, predecessoras inexistentes e durações inválidas.
-- Smoke check da página IFC e das funções de renderização dos módulos.
+- Smoke check da página IFC, navegação de Clima/IA, data de status financeiro e vínculos de renderização.
 
 ## CI
 
