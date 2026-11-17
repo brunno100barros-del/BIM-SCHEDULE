@@ -11,7 +11,7 @@ test("a demonstração carrega os módulos e liga a página IFC ao renderer corr
   assert.ok(source.includes("data-status-day"));
   assert.ok(source.includes("function calculateEarnedValue"));
   assert.match(html, /<script src="\.\/schedule-enhancements\.js"><\/script>/);
-  for (const binding of ["window.financial=financial", "window.resources=resources", "window.risks=risks", "window.audit=audit", "window.ifcPage=ifcPage", "window.bim=bim", "window.weather=weather", "window.exchange=exchange", "window.render=render", "titles.weather", "titles.exchange"]) {
+  for (const binding of ["window.financial=financial", "window.resources=resources", "window.risks=risks", "window.audit=audit", "window.ifcPage=ifcPage", "window.bim=bim", "window.weather=weather", "window.exchange=exchange", "window.render=render", "window.resetBimScheduleProject", "titles.weather", "titles.exchange"]) {
     assert.ok(source.includes(binding), `Vínculo ausente: ${binding}`);
   }
 });
