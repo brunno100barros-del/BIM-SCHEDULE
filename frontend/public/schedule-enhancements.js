@@ -694,8 +694,14 @@
 
   // Publica os módulos substitutos para a interface principal (script clássico).
   window.financial=financial; window.resources=resources; window.risks=risks; window.audit=audit;
-  window.gantt=gantt; window.ifcPage=ifcPage; window.bim=bim; window.render=render;
+  window.gantt=gantt; window.ifcPage=ifcPage; window.bim=bim; window.weather=weather; window.exchange=exchange; window.render=render;
   window.recalc=recalc; window.date=date; window.save=save; window.parseIfc=parseIfc;
+
+  // Registra os módulos adicionais na navegação existente.
+  titles.weather = "Clima e impacto no planejamento";
+  titles.exchange = "Central de intercâmbio com IA";
+  if (!navs.some(section => section[1].some(item => item[0] === "weather"))) navs.push(["CAMPO", [["weather", "☂", "Clima e impacto"]]]);
+  if (!navs.some(section => section[1].some(item => item[0] === "exchange"))) navs.push(["INTEGRAÇÃO", [["exchange", "✧", "Central de IA"]]]);
 
   // Intercepta os módulos do projeto demonstrativo com cálculos efetivos.
   window.addEventListener("load", async () => {
