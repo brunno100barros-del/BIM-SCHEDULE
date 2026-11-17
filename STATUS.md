@@ -1,51 +1,31 @@
-# Status de desenvolvimento — BIM SCHEDULE 0.3.0-dev
+# Status de desenvolvimento — BIM SCHEDULE · interface demonstrativa
 
 Atualizado em 2026-11-17.
 
-## Implementado nesta compilação
+## Interface demonstrativa
+- [x] Interface de entrada inspirada no sistema Industrial Precision do COORDIX.
+- [x] Tipografia IBM Plex, paleta grafite/cobre e linhas técnicas.
+- [x] Símbolo vetorial COORDIX integrado como referência visual do ecossistema.
+- [x] Temas claro e escuro com preferência local.
+- [x] Projeto modelo carregado por padrão.
+- [x] Visão geral, EAP, Gantt, BIM 4D esquemático, custos, recursos, riscos e histórico.
+- [x] Edição local de avanço/duração, cadastro de atividade e recálculo simplificado FS.
+- [x] Linha do tempo com reprodução, seleção de atividades, exportação CSV e persistência local.
+- [x] Preservação do ambiente conectado anterior em Ambiente conectado.
 
-- [x] Motor CPM preservando múltiplas relações entre o mesmo par.
-- [x] Tratamento de FS, SS, FF e SF.
-- [x] Lags positivos e negativos com início de projeto como limite inferior.
-- [x] Detecção de ciclos e precedências inválidas.
-- [x] Prazo contratual rígido e identificação de folga negativa.
-- [x] SQLite com chaves estrangeiras ativadas.
-- [x] Migração Alembic inicial e atualização conservadora do esquema anterior.
-- [x] CRUD de projetos e duplicação de EAP/atividades/precedências.
-- [x] CRUD inicial de EAP.
-- [x] Cadastro, edição e exclusão de atividades.
-- [x] Cadastro e exclusão de precedências.
-- [x] Associação e desassociação Activity-IFC no backend.
-- [x] Upload IFC assíncrono básico com status e progresso por lotes.
-- [x] Extração inicial de GlobalIds, tipos, nomes, descrição e psets quando disponíveis.
-- [x] Painel de projeto.
-- [x] Interface de EAP.
-- [x] Gantt temporal inicial com conectores de dependência.
-- [x] Menu não anuncia módulos pendentes como funcionais.
+## Limites da demonstração
+- Dados do projeto modelo não são gravados no banco do backend.
+- Modelo 3D esquemático, não IFC; GlobalIds fictícios.
+- Simulação temporal não constitui BIM 4D real.
+- Curva S, indicadores financeiros, recursos e cenários são ilustrativos.
+- Recálculo demonstrativo simplificado, não substitui o motor CPM conectado FS/SS/FF/SF com lags.
+- Histórico local não é auditoria completa.
 
-## Parcial
+## Ambiente conectado
+Permanecem disponíveis os módulos anteriores de projetos, EAP, atividades, CPM/Gantt inicial e importação IFC assíncrona, com limitações descritas em AUDIT.md, IMPLEMENTATION_PLAN.md e TEST_REPORT.md.
 
-- [ ] Gantt: sem edição por arrastar, calendário útil e marcos.
-- [ ] IFC: sem extração completa de quantitativos, materiais e pavimentos.
-- [ ] Viewer: sem sincronização visual bidirecional de seleção de GlobalIds.
-- [ ] IFC: progresso por lotes, não progresso detalhado de cada etapa interna do parser.
-- [ ] Duplicação de projeto: duplica EAP, atividades e precedências; não duplica arquivos IFC.
-- [ ] Visualizador: permanece em web-ifc-three, não That Open Engine.
-
-## Ainda não implementado
-
-- [ ] Recursos, equipes e equipamentos.
-- [ ] Cenários PERT probabilísticos.
-- [ ] Simulação BIM 4D completa.
-- [ ] Orçamento, cronograma físico-financeiro, curva S e fluxo de caixa.
-- [ ] Análise climática.
-- [ ] Central Gemini com pacote manual estruturado.
-- [ ] Auditoria e versionamento completo.
-- [ ] Exportação Excel/PDF.
-- [ ] Instalação e execução validadas em Windows.
-
-## Bloqueios de validação
-
-- O ambiente não possui IfcOpenShell instalado.
-- O registry npm não respondeu por erro de DNS; o build do frontend não pôde ser executado.
-- Não há ambiente Windows disponível para executar os arquivos BAT.
+## Validações pendentes
+- Instalação limpa e build npm em ambiente com acesso ao registry.
+- Teste responsivo em desktop, notebook e celular.
+- Teste manual do ambiente conectado com backend ativo.
+- Teste ponta a ponta de importação IFC real e persistência.
