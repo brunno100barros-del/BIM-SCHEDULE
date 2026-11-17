@@ -246,7 +246,7 @@
       points.push({p:planned,e:earned});
     }
     const total = Math.max(1,...points.map(x=>x.p));
-    const path = key => points.map((x,i)=>((i?"L":"M")+(35+i*49.5).toFixed(1)+" "+(160-x[key]/total*130).toFixed(1)).join(" ");
+    const path = key => points.map((x,i)=>((i?"L":"M")+(35+i*49.5).toFixed(1)+" "+(160-x[key]/total*130).toFixed(1))).join(" ");
     return '<path d="'+path("p")+'" fill="none" stroke="var(--blue)" stroke-width="3"/><path d="'+path("e")+'" fill="none" stroke="var(--a)" stroke-width="3"/>';
   }
   function resources() {
@@ -275,7 +275,7 @@
       const durations={};
       state.activities.forEach(a=>{
         const o=Math.max(0,Number(a.optimistic ?? Number(a.duration||0)*0.85));
-        const m=Math.max(o,Number(a.mostLikely ?? a.duration||0));
+        const m=Math.max(o,Number(a.mostLikely ?? (a.duration||0)));
         const p=Math.max(m,Number(a.pessimistic ?? Number(a.duration||0)*1.25));
         durations[a.id]=triangular(o,m,p);
       });
@@ -383,7 +383,8 @@
       const renderer=new THREE.WebGLRenderer({antialias:true,alpha:false});
       renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2)); renderer.setSize(container.clientWidth,container.clientHeight);
       container.replaceChildren(renderer.domElement);
-      const controls=new THREE.OrbitControls ? new THREE.OrbitControls(camera,renderer.domElement) : null;
+      const controlsMod=await import("https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js");
+      const controls=new controlsMod.OrbitControls(camera,renderer.domElement);
       const loader=new IFCLoader();
       loader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.50/");
       const url=URL.createObjectURL(ifcModel.file);
@@ -540,6 +541,11 @@
     const xml='<?xml version="1.0"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Atividades"><Table>'+rows.map(row=>'<Row>'+row.map(v=>'<Cell><Data ss:Type="'+(typeof v==="number"?"Number":"String")+'">'+escHtml(v)+'</Data></Cell>').join("")+'</Row>').join("")+'</Table></Worksheet></Workbook>';
     downloadText("BIM-SCHEDULE-atividades.xls",xml,"application/vnd.ms-excel");
   }
+
+  // Publica os módulos substitutos para a interface principal (script clássico).
+  window.financial=financial; window.resources=resources; window.risks=risks; window.audit=audit;
+  window.gantt=gantt; window.ifc=ifcPage; window.bim4d=bim; window.render=render;
+  window.recalc=recalc; window.date=date; window.save=save; window.parseIfc=parseIfc;
 
   // Intercepta os módulos do projeto demonstrativo com cálculos efetivos.
   window.addEventListener("load", () => {
