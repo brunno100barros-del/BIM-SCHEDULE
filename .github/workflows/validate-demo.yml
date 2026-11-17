@@ -39,6 +39,12 @@ jobs:
       - name: Test browser schedule engine
         working-directory: frontend
         run: npm run test:schedule
+      - name: Install Playwright Chromium
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Test demo page for JavaScript errors
+        working-directory: frontend
+        run: npm run test:e2e
       - name: Build frontend
         working-directory: frontend
         run: npm run build

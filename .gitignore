@@ -12,3 +12,7 @@ backend/uploads/
 
 # Web-IFC WASM (copied by frontend postinstall)
 frontend/public/*.wasm
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/

@@ -30,7 +30,10 @@
     snapshots: Array.isArray(savedExt.snapshots) ? savedExt.snapshots : []
   };
   const baseSave = save;
-  const baseRender = render;
+  // A declaração local de render (mais abaixo) é içada (hoisting) nesta IIFE; ler `render`
+  // aqui retornaria a própria versão estendida e causaria recursão infinita.
+  // A função original do demo.html é a declaração global em `window.render`.
+  const baseRender = window.render;
   const baseParseIfc = parseIfc;
   let projectStore = loadJson(PROJECTS_KEY, []);
   let viewer = null;
