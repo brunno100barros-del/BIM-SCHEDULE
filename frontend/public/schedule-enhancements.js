@@ -547,7 +547,7 @@
 
   // Publica os módulos substitutos para a interface principal (script clássico).
   window.financial=financial; window.resources=resources; window.risks=risks; window.audit=audit;
-  window.gantt=gantt; window.ifc=ifcPage; window.bim4d=bim; window.render=render;
+  window.gantt=gantt; window.ifcPage=ifcPage; window.bim=bim; window.render=render;
   window.recalc=recalc; window.date=date; window.save=save; window.parseIfc=parseIfc;
 
   // Intercepta os módulos do projeto demonstrativo com cálculos efetivos.
