@@ -77,3 +77,27 @@ def test_status_reports_real_capabilities(client):
     assert caps["budget_import"] == "not_implemented"
     assert caps["ai_local_ollama"] == "not_implemented"
     assert caps["simulation_4d"] == "not_implemented"
+
+
+def test_cors_accepts_desktop_protocol_origin_only_when_configured(tmp_path):
+    """App Windows (Electron): interface em app://bim-schedule; a origem "null" (file://) nunca é aceita."""
+    preflight = {"Access-Control-Request-Method": "GET", "Access-Control-Request-Headers": "x-bim-schedule-token"}
+
+    # Padrão (desenvolvimento): nem app:// nem null.
+    with TestClient(create_app(make_settings(tmp_path / "padrao"))) as client:
+        for origin in ("app://bim-schedule", "null"):
+            r = client.options("/api/v1/projects/", headers={"Origin": origin, **preflight})
+            assert "access-control-allow-origin" not in r.headers, origin
+
+    # Como o Electron iniciará o serviço: somente a origem exata do protocolo próprio.
+    settings = make_settings(tmp_path / "desktop", CORS_ORIGINS=["app://bim-schedule"], LOCAL_API_TOKEN="t")
+    with TestClient(create_app(settings)) as client:
+        ok = client.options("/api/v1/projects/", headers={"Origin": "app://bim-schedule", **preflight})
+        assert ok.status_code == 200
+        assert ok.headers["access-control-allow-origin"] == "app://bim-schedule"
+        assert "x-bim-schedule-token" in ok.headers["access-control-allow-headers"].lower()
+        get = client.get("/api/v1/projects/", headers={"Origin": "app://bim-schedule", "X-BIM-Schedule-Token": "t"})
+        assert get.status_code == 200 and get.headers["access-control-allow-origin"] == "app://bim-schedule"
+        for origin in ("null", "app://outro-app", "http://127.0.0.1:3000"):
+            r = client.options("/api/v1/projects/", headers={"Origin": origin, **preflight})
+            assert "access-control-allow-origin" not in r.headers, origin

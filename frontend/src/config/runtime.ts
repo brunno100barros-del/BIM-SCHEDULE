@@ -3,7 +3,7 @@
  *
  * Ordem de precedência para o endereço da API:
  *  1. `window.__BIM_SCHEDULE_CONFIG__.apiBaseUrl` — definido em tempo de execução
- *     por `public/runtime-config.js` ou pelo preload do aplicativo Windows;
+ *     por `runtime-config.js` (no aplicativo Windows, gerado pelo handler do protocolo app://);
  *  2. `VITE_API_BASE_URL` — definido na compilação (ex.: edição Web com backend remoto);
  *  3. `/api/v1` — proxy do servidor de desenvolvimento do Vite.
  */

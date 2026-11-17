@@ -240,17 +240,26 @@ class JobManager:
             job.message = "Em execução"
             db.commit()
 
-        process = self._mp.Process(
-            target=run_job_process,
-            args=(job_id, kind, params, self.database_url, self.log_level,
-                  str(self.logs_dir) if self.logs_dir else None, self.poll_interval),
-            name=f"bim-job-{job_id[:8]}",
-            daemon=True,
-        )
-        with self._lock:
-            self._processes[job_id] = process
         try:
+            process = self._mp.Process(
+                target=run_job_process,
+                args=(job_id, kind, params, self.database_url, self.log_level,
+                      str(self.logs_dir) if self.logs_dir else None, self.poll_interval),
+                name=f"bim-job-{job_id[:8]}",
+                daemon=True,
+            )
+            with self._lock:
+                self._processes[job_id] = process
             process.start()
+        except Exception as exc:
+            # Sem processo não há quem finalize a tarefa: registra a falha aqui para que
+            # ela não fique "running" indefinidamente. O supervisor segue para a próxima.
+            with self._lock:
+                self._processes.pop(job_id, None)
+            logger.exception("Falha ao iniciar o processo da tarefa %s (%s)", job_id, kind)
+            self._fail_to_start(job_id, kind, params, exc)
+            return
+        try:
             with self._sessions() as db:
                 job = db.get(JobModel, job_id)
                 if job is not None:
@@ -282,6 +291,22 @@ class JobManager:
                     process.join(5)
                 return True
         return False
+
+    def _fail_to_start(self, job_id: str, kind: str, params: dict, exc: BaseException) -> None:
+        """Registra como ``failed`` uma tarefa cujo processo não pôde ser iniciado."""
+        detail = str(exc).strip() or exc.__class__.__name__
+        with self._sessions() as db:
+            job = db.get(JobModel, job_id)
+            if job is None:
+                return
+            job.status = "failed"
+            job.message = "Falhou ao iniciar"
+            job.error = (f"Não foi possível iniciar o processo da tarefa ({exc.__class__.__name__}: {detail}). "
+                         "Verifique memória disponível, antivírus e permissões, e tente novamente.")[:2000]
+            job.pid = None
+            job.finished_at = utcnow()
+            db.commit()
+        self._run_abort_hook(kind, job_id, params, "failed")
 
     def _finalize(self, job_id: str, kind: str, params: dict, exitcode: Optional[int], forced: bool) -> None:
         with self._sessions() as db:

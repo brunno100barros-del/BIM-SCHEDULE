@@ -5,8 +5,8 @@ import react from '@vitejs/plugin-react'
 // Os testes de ponta a ponta usam outra porta para não interferir em um serviço aberto.
 const apiTarget = process.env.BIM_SCHEDULE_API_PROXY ?? 'http://127.0.0.1:8000'
 
-// base relativa: o mesmo build funciona servido pelo Vite, em subpastas
-// e carregado por file:// dentro do aplicativo Windows (Electron).
+// base relativa: o mesmo build funciona servido pelo Vite, em subpastas e sob o
+// protocolo próprio app://bim-schedule do aplicativo Windows (ver docs/architecture/WINDOWS_DESKTOP.md).
 export default defineConfig({
   base: './',
   plugins: [react()],

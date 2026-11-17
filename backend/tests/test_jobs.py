@@ -132,3 +132,63 @@ def test_jobs_api_errors(client):
     assert client.get("/api/v1/jobs/inexistente").json()["error"]["code"] == "job_not_found"
     assert client.post("/api/v1/jobs/inexistente/cancel").status_code == 404
     assert client.get("/api/v1/jobs/").status_code == 200
+
+
+class FailingStartContext:
+    """Contexto multiprocessing cujo Process.start() falha nas primeiras N chamadas."""
+
+    def __init__(self, real, failures=1):
+        self.real = real
+        self.failures = failures
+
+    def Process(self, *args, **kwargs):
+        process = self.real.Process(*args, **kwargs)
+        if self.failures > 0:
+            self.failures -= 1
+
+            def start():
+                raise OSError("[WinError 1455] O arquivo de paginação é muito pequeno para concluir a operação")
+
+            process.start = start
+        return process
+
+
+def test_process_start_failure_marks_job_failed_and_supervisor_continues(runtime, monkeypatch):
+    monkeypatch.setattr(runtime.jobs, "_mp", FailingStartContext(runtime.jobs._mp, failures=1))
+    job = runtime.jobs.submit("system.diagnostic", {"steps": 2, "step_seconds": 0.01})
+    final = runtime.jobs.wait(job["id"], timeout=15)
+    assert final["status"] == "failed", final
+    assert final["is_terminal"] is True and final["finished_at"] is not None
+    assert final["message"] == "Falhou ao iniciar"
+    assert "Não foi possível iniciar o processo da tarefa" in final["error"]
+    assert "OSError" in final["error"] and "WinError 1455" in final["error"]
+    with SessionLocal() as db:
+        assert db.get(JobModel, job["id"]).pid is None
+    assert runtime.jobs.active_count() == 0
+
+    # O supervisor continua atendendo a fila depois da falha.
+    next_job = runtime.jobs.submit("system.diagnostic", {"steps": 2, "step_seconds": 0.01})
+    assert runtime.jobs.wait(next_job["id"])["status"] == "completed"
+
+
+def test_process_start_failure_runs_abort_hook_for_ifc(client, runtime, monkeypatch, tmp_path):
+    from ifc_factory import build_ifc
+
+    monkeypatch.setattr(runtime.jobs, "_mp", FailingStartContext(runtime.jobs._mp, failures=1))
+    project_id = client.post("/api/v1/projects/", json={"name": "Falha", "code": "START-FAIL"}).json()["id"]
+    ifc = build_ifc(tmp_path / "modelo.ifc", walls=3)
+    with ifc.open("rb") as handle:
+        body = client.post(f"/api/v1/ifc/project/{project_id}/upload",
+                           files={"file": ("modelo.ifc", handle, "application/octet-stream")}).json()
+    final = runtime.jobs.wait(body["job_id"], timeout=15)
+    assert final["status"] == "failed"
+    model = client.get(f"/api/v1/ifc/model/{body['id']}").json()
+    assert model["status"] == "failed"  # abort_hook executado: o modelo não fica "queued"/"processing"
+    assert body["job_id"] in model["error_message"]
+    assert client.get(f"/api/v1/ifc/model/{body['id']}/elements").json() == []
+
+    # Novo envio é processado normalmente pelo mesmo supervisor.
+    with ifc.open("rb") as handle:
+        retry = client.post(f"/api/v1/ifc/project/{project_id}/upload",
+                            files={"file": ("modelo.ifc", handle, "application/octet-stream")}).json()
+    assert runtime.jobs.wait(retry["job_id"], timeout=60)["status"] == "completed"

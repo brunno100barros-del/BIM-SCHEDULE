@@ -156,7 +156,7 @@ sequenceDiagram
 
 - O serviço escuta **somente em 127.0.0.1**. `python -m app` recusa outros endereços.
 - `TrustedHostMiddleware` aceita apenas `127.0.0.1`, `localhost` e `::1` no cabeçalho Host, o que protege contra *DNS rebinding*.
-- O CORS libera apenas as origens configuradas, sem credenciais.
+- O CORS libera apenas as origens configuradas (comparação exata, sem credenciais). A origem `null` de páginas `file://` nunca é autorizada; o app Windows usa a origem `app://bim-schedule`.
 - O token local é opcional (`BIM_SCHEDULE_LOCAL_API_TOKEN`). Quando definido, toda rota `/api` exige o cabeçalho `X-BIM-Schedule-Token`, exceto `/system/health`. O app Windows deverá gerar um token por sessão.
 - **Uploads:** só arquivos `.ifc`, com limite de tamanho. O nome é sanitizado e o arquivo fica sempre dentro de `uploads/`. Arquivos parciais são removidos em caso de erro.
 - Erros internos retornam mensagem genérica com `request_id`, e o detalhe vai só para o log.
@@ -182,8 +182,8 @@ public/
 
 - Existe **uma aplicação principal**. O parâmetro `?connected=1` e o iframe foram removidos.
 - **Sem serviço:** o app mostra orientação para iniciá-lo e um link para a demonstração, identificada como "dados fictícios". Nenhum dado simulado aparece na aplicação principal.
-- **Configuração em tempo de execução:** o app Windows define `window.__BIM_SCHEDULE_CONFIG__ = { apiBaseUrl, apiToken, mode }` por um *preload* (ou substitui `runtime-config.js`) **sem recompilar o frontend**.
-- O build usa `base: './'`, então funciona no servidor Vite, em subpastas e em `file://` (Electron).
+- **Configuração em tempo de execução:** o app Windows serve um `runtime-config.js` gerado na hora, que define `window.__BIM_SCHEDULE_CONFIG__ = { apiBaseUrl, apiToken, mode }`, **sem recompilar o frontend**.
+- O build usa `base: './'`, então funciona no servidor Vite, em subpastas e sob o protocolo próprio `app://bim-schedule` do Electron.
 
 ## 4. Estratégia para Web
 
@@ -200,7 +200,8 @@ O GitHub Pages **não executa** Python. Nenhuma funcionalidade do serviço está
 Resumo (detalhes em [`WINDOWS_DESKTOP.md`](WINDOWS_DESKTOP.md)):
 
 - **Electron** como casca do app, carregando o mesmo build do frontend.
-- O backend é empacotado com **PyInstaller** (modo pasta) e iniciado pelo Electron como processo filho: `bim-schedule-service --port 0`. O serviço imprime `BIM_SCHEDULE_READY {"api_base_url": ...}`. O Electron lê essa linha, consulta `/system/health`, injeta `apiBaseUrl` e `apiToken` pelo *preload* e encerra o serviço ao fechar.
+- O backend é empacotado com **PyInstaller** (modo pasta) e iniciado pelo Electron como processo filho: `bim-schedule-service --port 0`. O serviço imprime `BIM_SCHEDULE_READY {"api_base_url": ...}`. O Electron lê essa linha, consulta `/system/health` e encerra o serviço ao fechar.
+- A interface é carregada pelo **protocolo privilegiado `app://bim-schedule`**, e não por `loadFile()`. Com `file://`, a origem seria `null`, que o CORS do serviço não aceita e não deve aceitar. O Electron autoriza só a origem exata (`BIM_SCHEDULE_CORS_ORIGINS=["app://bim-schedule"]`) e entrega `apiBaseUrl` e `apiToken` em um `runtime-config.js` gerado pelo handler do protocolo. Detalhes e alternativas avaliadas: `WINDOWS_DESKTOP.md`, seção 3.1.
 - O usuário não abre terminal.
 - O funcionamento **offline** ainda não foi validado e não está prometido. Hoje a demonstração carrega fontes e bibliotecas por CDN. A aplicação React não usa CDN, mas o pacote Windows ainda não existe para ser testado offline.
 

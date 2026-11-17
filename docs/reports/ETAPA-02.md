@@ -135,16 +135,16 @@ Todos os testes abaixo foram **executados**. Os resultados são os observados.
 
 | Conjunto | Ambiente | Resultado |
 |---|---|---|
-| Backend (pytest) | Linux, Python 3.13 (local) | **62 aprovados** |
-| Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12 | **62 aprovados** |
-| Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | **62 aprovados** (valida `spawn`, caminhos e reinício do serviço no Windows) |
+| Backend (pytest) | Linux, Python 3.13 (local) | **65 aprovados** (após a revisão; eram 62) |
+| Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12 | Aguardando a execução do CI desta revisão (antes: 62/62) |
+| Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | Aguardando a execução do CI desta revisão (antes: 62/62) |
 | Frontend unitários (Vitest) | local e CI | **12 aprovados** |
 | Motor da demonstração (node:test) | local e CI | **9 aprovados** |
 | Ponta a ponta (Playwright, Chromium) | local e CI | **8 aprovados** |
 | Type check + build de produção | local e CI | Aprovado |
 | `npm ci` a partir do lockfile | local e CI | Aprovado |
 
-Composição dos 62 testes do backend: 20 anteriores (CPM, API, banco) e 42 novos.
+Composição dos 65 testes do backend: 20 anteriores (CPM, API, banco) e 45 novos (42 da entrega inicial e 3 da revisão do PR #5).
 - **Tarefas:** progresso; API responsiva durante a tarefa; cancelamento cooperativo; encerramento forçado de tarefa que não responde; falha; morte do processo; cancelamento na fila; desligamento do serviço; recuperação de tarefas interrompidas.
 - **IFC real:** processamento completo, cancelamento sem dados parciais, arquivo corrompido, validações, limite de tamanho, confinamento do arquivo em `uploads/`.
 - **Preservação de dados:** leitura no modo legado; migração validada com hashes intactos e reinício sem nova migração; falha de migração mantendo o local legado; cópia divergente rejeitada; URL explícita; atualização de esquema com backup.
@@ -156,9 +156,34 @@ Composição dos 62 testes do backend: 20 anteriores (CPM, API, banco) e 42 novo
 - `index.html` referenciava `/vite.svg`, um arquivo inexistente: removido.
 - `ProjectList` só registrava erros no console. Exclusão e duplicação geravam rejeições não tratadas. Corrigido.
 - Os módulos de projeto na barra lateral abriam uma tela vazia sem projeto selecionado: agora ficam desabilitados.
-- O visualizador IFC usava `setWasmPath('/')`, que falha em subpastas e em `file://`: agora é relativo.
+- O visualizador IFC usava `setWasmPath('/')`, que falha em subpastas e sob outro protocolo: agora é relativo.
 
-### C.4 Problemas encontrados e **não** corrigidos (fora do escopo; não introduzidos nesta etapa)
+### C.4 Revisão do PR #5 — correções solicitadas
+
+**1. Falha ao iniciar o processo da tarefa** (`backend/app/jobs/manager.py`)
+
+- **Problema:** em `_run()`, se `process.start()` lançasse exceção, o fluxo saía antes de `_finalize()`, e a tarefa ficava indefinidamente com status `running`.
+- **Correção:** a criação do `Process` e o `start()` ficam em um bloco protegido. Em caso de falha, o novo `_fail_to_start()`:
+  - registra a tarefa como `failed`, com a mensagem "Falhou ao iniciar";
+  - grava um erro compreensível com o tipo e o texto da exceção e uma orientação;
+  - limpa o `pid`, grava `finished_at` e libera a referência ao processo;
+  - executa o `abort_hook` do tipo de tarefa. No IFC, o modelo passa a `failed`, sem elementos parciais.
+  - O supervisor retorna normalmente e continua atendendo a fila.
+- **Testes novos** (`backend/tests/test_jobs.py`), simulando `OSError` em `Process.start()`:
+  - `test_process_start_failure_marks_job_failed_and_supervisor_continues`: tarefa `failed` com mensagem e erro, `pid` nulo, nenhum processo ativo, e a tarefa seguinte é concluída.
+  - `test_process_start_failure_runs_abort_hook_for_ifc`: envio de IFC real com falha de inicialização deixa o modelo `failed`, com o `job_id` na mensagem e sem elementos; um novo envio é processado normalmente.
+  - Contraprova: os dois testes falham com o `manager.py` anterior (a tarefa permanecia `running`).
+
+**2. Electron e CORS** (`docs/architecture/WINDOWS_DESKTOP.md`, seção 3.1, e `ARCHITECTURE.md`)
+
+- **Problema:** a proposta usava `BrowserWindow.loadFile()`. Uma página `file://` envia `Origin: null`, que o serviço não autoriza e não deve autorizar.
+- **Solução documentada:** a interface é carregada pelo protocolo privilegiado `app://bim-schedule` (*standard* + *secure*), com `protocol.handle` servindo `dist/` com proteção contra caminhos fora da pasta e tipos MIME corretos (`application/wasm`). O handler gera `runtime-config.js` com o endereço e o token da sessão. O Electron inicia o serviço com `BIM_SCHEDULE_CORS_ORIGINS=["app://bim-schedule"]`, uma única origem exata. `webSecurity`, `contextIsolation` e `sandbox` permanecem ativos, e `null` e `*` nunca são liberados.
+- **Alternativas avaliadas e registradas:** servidor HTTP local do Electron e o próprio FastAPI servindo a interface.
+- **Teste novo** (`backend/tests/test_errors_security.py::test_cors_accepts_desktop_protocol_origin_only_when_configured`): com a configuração do app Windows, o *preflight* com `X-BIM-Schedule-Token` e o GET a partir de `app://bim-schedule` são aceitos. As origens `null`, `app://outro-app` e `http://127.0.0.1:3000` são recusadas. Na configuração padrão, nem `app://` nem `null` são aceitas.
+- **Código do backend:** sem alteração, porque o CORS já compara origens exatas e aceita a lista por variável de ambiente. Só comentários do frontend que citavam `file://` ou preload foram atualizados: `vite.config.ts`, `IfcViewer.tsx`, `config/runtime.ts`, `public/runtime-config.js`.
+- **Pendente** (etapa de distribuição): implementar e testar o handler do protocolo e a casca Electron com o app empacotado.
+
+### C.5 Problemas encontrados e **não** corrigidos (fora do escopo; não introduzidos nesta etapa)
 
 1. **Erros de JavaScript na demonstração estática** (`demo.html` / `schedule-enhancements.js`, idênticos aos da `main`): `weather is not defined` e `Maximum call stack size exceeded` ao carregar. Reproduzidos com os arquivos da `main` sem modificação. A demonstração continua sendo publicada como estava.
 2. **Tema escuro:** o botão aplica a classe `dark` em `<html>`, mas `index.css` verifica `body:not(.dark)`. Na prática a aplicação sempre exibe o tema claro remapeado. O comportamento foi preservado para não alterar a identidade visual.

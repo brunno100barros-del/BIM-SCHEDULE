@@ -34,7 +34,7 @@ export const IfcViewer: React.FC<IfcViewerProps> = ({ ifcUrl, requestHeaders }) 
     directional.position.set(10, 20, 10); scene.add(directional);
     const grid = new THREE.GridHelper(100, 100, 0x334155, 0x1e293b); scene.add(grid);
     const loader = new IFCLoader();
-    // Caminho relativo à aplicação: funciona no Vite, em subpastas e em file:// (Electron).
+    // Caminho relativo à aplicação: funciona no Vite, em subpastas e em app://bim-schedule (Electron).
     loader.ifcManager.setWasmPath(import.meta.env.BASE_URL);
     loader.setRequestHeader(JSON.parse(headersKey));
     setLoading(true); setError('');
