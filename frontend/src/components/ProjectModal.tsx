@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, FolderPlus, Save } from 'lucide-react';
 import { Project, ProjectCreateInput } from '../types/project';
+import { getErrorMessage } from '../services/apiClient';
 
 interface ProjectModalProps {
   isOpen: boolean;
@@ -54,8 +55,8 @@ export const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onS
       setError('');
       await onSave({ name, code, client, description, start_date: startDate, end_date: endDate, status });
       onClose();
-    } catch (err: any) {
-      setError(err.response?.data?.detail || 'Erro ao salvar projeto.');
+    } catch (err) {
+      setError(getErrorMessage(err, 'Erro ao salvar projeto.'));
     } finally {
       setLoading(false);
     }

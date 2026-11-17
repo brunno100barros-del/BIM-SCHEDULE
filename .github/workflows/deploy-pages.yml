@@ -1,5 +1,8 @@
 name: Deploy BIM SCHEDULE to GitHub Pages
 
+# O GitHub Pages publica somente a DEMONSTRAÇÃO estática (raiz do site).
+# A aplicação React depende do serviço local e não é publicada aqui.
+
 on:
   push:
     branches: [main]
@@ -24,18 +27,15 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Install frontend dependencies
+      - name: Build static demo site
         working-directory: frontend
-        run: npm install
-      - name: Build static site
-        working-directory: frontend
-        run: npm run build
+        run: npm run build:pages
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: frontend/dist
+          path: frontend/pages-dist
 
   deploy:
     environment:

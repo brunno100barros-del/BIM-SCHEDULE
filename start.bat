@@ -18,11 +18,12 @@ echo ====================================================
 echo       BIM SCHEDULE - Inicializador
 echo ====================================================
 echo.
-start "BIM SCHEDULE - Backend" cmd /k "cd /d ""%ROOT%backend"" && set ""PYTHONPATH=%ROOT%backend"" && ""%ROOT%.venv\Scripts\python.exe"" -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
+start "BIM SCHEDULE - Backend" cmd /k "cd /d ""%ROOT%backend"" && set ""PYTHONPATH=%ROOT%backend"" && ""%ROOT%.venv\Scripts\python.exe"" -m app --port 8000"
 start "BIM SCHEDULE - Frontend" cmd /k "cd /d ""%ROOT%frontend"" && npm run dev -- --host 127.0.0.1"
 echo Backend: http://127.0.0.1:8000
 echo Swagger: http://127.0.0.1:8000/docs
 echo Frontend: http://127.0.0.1:3000
+echo Dados: %%LOCALAPPDATA%%\BIM-SCHEDULE
 echo.
 echo Os dois terminais serao abertos separadamente. Feche-os para encerrar os servicos.
 pause

@@ -3,8 +3,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { IFCLoader } from 'web-ifc-three/IFCLoader';
 
-interface IfcViewerProps { ifcUrl: string | null }
-export const IfcViewer: React.FC<IfcViewerProps> = ({ ifcUrl }) => {
+interface IfcViewerProps { ifcUrl: string | null; requestHeaders?: Record<string, string> }
+export const IfcViewer: React.FC<IfcViewerProps> = ({ ifcUrl, requestHeaders }) => {
+  // Chave estável: o objeto de cabeçalhos é recriado a cada renderização.
+  const headersKey = JSON.stringify(requestHeaders ?? {});
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -32,7 +34,9 @@ export const IfcViewer: React.FC<IfcViewerProps> = ({ ifcUrl }) => {
     directional.position.set(10, 20, 10); scene.add(directional);
     const grid = new THREE.GridHelper(100, 100, 0x334155, 0x1e293b); scene.add(grid);
     const loader = new IFCLoader();
-    loader.ifcManager.setWasmPath('/');
+    // Caminho relativo à aplicação: funciona no Vite, em subpastas e em file:// (Electron).
+    loader.ifcManager.setWasmPath(import.meta.env.BASE_URL);
+    loader.setRequestHeader(JSON.parse(headersKey));
     setLoading(true); setError('');
 
     loader.load(ifcUrl, (model) => {
@@ -87,7 +91,7 @@ export const IfcViewer: React.FC<IfcViewerProps> = ({ ifcUrl }) => {
       });
       renderer.dispose(); renderer.domElement.remove();
     };
-  }, [ifcUrl]);
+  }, [ifcUrl, headersKey]);
 
   return <div className="w-full h-full min-h-[420px] relative border border-slate-700 rounded-xl overflow-hidden bg-slate-900 shadow-inner">
     {!ifcUrl && <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-sm font-medium">Selecione ou faça upload de um modelo IFC para visualizar.</div>}
