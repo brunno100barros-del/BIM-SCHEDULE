@@ -16,12 +16,12 @@ Atualizado em 17/11/2026. Esta é uma versão de desenvolvimento, não uma liber
 - [x] Viewer geométrico IFC 3D experimental.
 - [x] Simulação 4D temporal por atividade/GlobalId.
 - [x] Arquivamento de GlobalIds de versões anteriores e comparação de inclusões/remoções.
-- [x] Controle financeiro EV/PV/AC/SPI/CPI/EAC com limitações documentadas.
+- [x] Controle financeiro EV/PV/AC/SPI/CPI/EAC com data de status editável e PV linear aproximado.
 - [x] Cadastro de recursos, alocações e alertas básicos de sobrealocação.
 - [x] PERT e Monte Carlo triangular.
 - [x] Consulta meteorológica Open-Meteo.
 - [x] Intercâmbio JSON com IA externa e aprovação manual.
-- [x] Snapshots e histórico local.
+- [x] Snapshots e histórico local, incluindo custos, calendário, recursos e vínculos IFC.
 - [x] Exportação SpreadsheetML e impressão para PDF.
 - [x] Testes de regressão CPM e smoke checks da integração de módulos adicionados ao CI.
 
