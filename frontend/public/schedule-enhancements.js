@@ -30,11 +30,11 @@
   function currentProject() {
     return projectStore.find(p => p.id === ext.projectId) || null;
   }
-  function projectPayload() {
+  function projectPayload(includeIfcElements) {
     return { id: ext.projectId, name: ext.projectName || "Projeto modelo BIMOFFICE", code: ext.projectCode || "ADM-001",
       savedAt: new Date().toISOString(), activities: state.activities, audit: state.audit, ext: JSON.parse(JSON.stringify(ext)),
       ifc: ifcModel ? { name: ifcModel.name, schema: ifcModel.schema, uploadedAt: ifcModel.uploadedAt,
-        elements: ifcElements, mappings: ifcModel.mappings || {} } : null };
+        mappings: ifcModel.mappings || {}, elements: includeIfcElements ? ifcElements : undefined } : null };
   }
   function persistProject() {
     const payload = projectPayload();
@@ -185,7 +185,7 @@
     persistExt(); baseSave(); refreshProjectSelect(); baseRender();
   }
   function exportProject() {
-    const payload = projectPayload();
+    const payload = projectPayload(true);
     downloadText((payload.code || "BIM-SCHEDULE") + ".json", JSON.stringify(payload, null, 2), "application/json");
     logEvent("Projeto exportado", "Backup JSON gerado no dispositivo.");
   }
@@ -199,6 +199,12 @@
       state.activities = p.activities; state.audit = p.audit || [];
       if (p.ifc && Array.isArray(p.ifc.elements)) {
         ifcElements = p.ifc.elements; ifcModel = { id:"active", name:p.ifc.name, schema:p.ifc.schema, uploadedAt:p.ifc.uploadedAt, elements:ifcElements, mappings:p.ifc.mappings || {} };
+      } else if (p.ifc && ifcModel && ifcModel.name === p.ifc.name) {
+        ifcModel.mappings = p.ifc.mappings || {};
+      } else if (!p.ifc || (ifcModel && ifcModel.name !== p.ifc.name)) {
+        ifcModel = null; ifcElements = [];
+      }
+      if (false) {
         notifyUser("Metadados e vínculos IFC importados. Para reabrir a geometria, importe novamente o arquivo IFC original.");
       }
       persistProject(); persistExt(); baseSave(); refreshProjectSelect(); baseRender();
@@ -432,8 +438,12 @@
     const previous = ifcModel && ifcElements.length ? { name:ifcModel.name, schema:ifcModel.schema, guids:ifcElements.map(e=>e.guid), uploadedAt:ifcModel.uploadedAt } : null;
     await originalParse(file);
     if (ifcModel && ifcModel.name === file.name) {
-      if(previous) ext.versions.push(previous);
-      ext.versions=ext.versions.slice(-20);
+      if(previous) {
+        const versionId="version-"+(previous.uploadedAt || Date.now());
+        try { await ifcDBPut({id:versionId,name:previous.name,schema:previous.schema,uploadedAt:previous.uploadedAt,guids:previous.guids}); } catch(e) { console.warn("Não foi possível arquivar a versão IFC anterior",e); }
+        ext.versions.push({id:versionId,name:previous.name,schema:previous.schema,uploadedAt:previous.uploadedAt,count:previous.guids.length});
+      }
+      ext.versions=ext.versions.slice(-5);
       persistExt();
     }
   };
@@ -532,12 +542,17 @@
     updates.forEach(u=>{const a=state.activities.find(x=>x.id===Number(u.id));if(!a)return;if(u.optimistic!==undefined)a.optimistic=Number(u.optimistic);if(u.most_likely!==undefined)a.mostLikely=Number(u.most_likely);if(u.pessimistic!==undefined)a.pessimistic=Number(u.pessimistic);});
     window.__bimScheduleAiPending=[];lastPert=null;logEvent("Sugestões de IA aprovadas",updates.length+" atividade(s) atualizadas após revisão manual.");save();render();
   });
-  function compareIfcVersions() {
+  async function compareIfcVersions() {
     const previous=ext.versions[ext.versions.length-1]; const target=document.getElementById("ifc-diff");
     if(!previous||!ifcModel){if(target)target.textContent="Não há versão anterior para comparar.";return;}
-    const oldSet=new Set(previous.guids||[]), newSet=new Set(ifcElements.map(x=>x.guid));
-    const added=[...newSet].filter(x=>!oldSet.has(x)), removed=[...oldSet].filter(x=>!newSet.has(x));
-    if(target)target.innerHTML='<div class="row">Elementos adicionados<b>'+added.length+'</b></div><div class="row">Elementos removidos<b>'+removed.length+'</b></div><div class="note">Versão anterior: '+escHtml(previous.name)+' · '+escHtml(previous.schema||"")+'<br>Comparação baseada em GlobalId; não detecta alterações geométricas ou de propriedades quando o GlobalId permanece igual.</div>';
+    try {
+      const db=await ifcDB();
+      const old=await new Promise((resolve,reject)=>{const q=db.transaction("models","readonly").objectStore("models").get(previous.id);q.onsuccess=()=>resolve(q.result);q.onerror=()=>reject(q.error);});
+      if(!old)throw new Error("Versão anterior não encontrada no IndexedDB.");
+      const oldSet=new Set(old.guids||[]), newSet=new Set(ifcElements.map(x=>x.guid));
+      const added=[...newSet].filter(x=>!oldSet.has(x)), removed=[...oldSet].filter(x=>!newSet.has(x));
+      if(target)target.innerHTML='<div class="row">Elementos adicionados<b>'+added.length+'</b></div><div class="row">Elementos removidos<b>'+removed.length+'</b></div><div class="note">Versão anterior: '+escHtml(previous.name)+' · '+escHtml(previous.schema||"")+'<br>Comparação baseada em GlobalId; não detecta alterações geométricas ou de propriedades quando o GlobalId permanece igual.</div>';
+    } catch(error) { if(target)target.textContent="Falha ao comparar versões: "+error.message; }
   }
   function exportExcel() {
     const rows=[["Código","Atividade","Disciplina","Duração (dias úteis)","Início","Término","Avanço (%)","Orçamento (R$)","Custo real (R$)"],...state.activities.map(a=>[a.code,a.name,a.disc,a.duration,a.start,a.start+a.duration,a.progress,a.cost,ext.actualCosts[a.id]||0])];
