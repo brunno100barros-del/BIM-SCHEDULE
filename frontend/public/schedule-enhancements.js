@@ -22,6 +22,7 @@
   let projectStore = loadJson(PROJECTS_KEY, []);
   let viewer = null;
   let viewerPromise = null;
+  let viewerTimer = null;
   let weatherBusy = false;
   let lastPert = null;
 
@@ -266,6 +267,7 @@
     return '<div class="stack"><div class="toolbar"><div><b>Cadastro e nivelamento de recursos</b><small>Equipes, equipamentos ou frentes de serviço</small></div><span class="pill">'+ext.resources.length+' RECURSOS</span></div><div class="g2">'+panel("NOVO RECURSO","CAPACIDADE E CUSTO",'<form id="resource-form" class="form"><label class="wide">Nome<input name="name" required placeholder="Equipe de montagem metálica"></label><label>Disciplina<select name="discipline"><option>GER</option><option>CIV</option><option>EST</option><option>MET</option><option>SAN</option><option>ELE</option><option>ARQ</option></select></label><label>Capacidade<input name="capacity" type="number" min="0.1" step="0.1" value="1"></label><label>Custo/dia (R$)<input name="cost" type="number" min="0" step="0.01" value="0"></label><button class="btn primary">Cadastrar</button></form>')+panel("ALOCAR RECURSO","VINCULE A UMA ATIVIDADE",'<form id="assignment-form" class="form"><label class="wide">Recurso<select name="resourceId" required>'+resourceOptions+'</select></label><label class="wide">Atividade<select name="activityId" required>'+activityOptions+'</select></label><label>Unidades<input name="units" type="number" min="0.1" step="0.1" value="1"></label><button class="btn primary" '+(!ext.resources.length?'disabled':'')+'>Alocar</button></form>')+'</div>'+panel("RECURSOS CADASTRADOS",ext.resources.length+" ITENS",ext.resources.length?'<div class="tablewrap"><table class="tbl"><thead><tr><th>RECURSO</th><th>DISC.</th><th>CAPACIDADE</th><th>CUSTO/DIA</th><th></th></tr></thead><tbody>'+ext.resources.map(r=>'<tr><td>'+escHtml(r.name)+'</td><td>'+r.discipline+'</td><td>'+r.capacity+'</td><td>'+moneyBR(r.costPerDay)+'</td><td><button class="btn" data-remove-resource="'+r.id+'">Excluir</button></td></tr>').join("")+'</tbody></table></div>':'<div class="note">Nenhum recurso cadastrado. Cadastre equipes, equipamentos ou materiais para começar.</div>')+panel("ALOCAÇÕES",ext.assignments.length+" VÍNCULOS",assignments?'<div class="tablewrap"><table class="tbl"><thead><tr><th>RECURSO</th><th>ATIVIDADE</th><th>UNIDADES</th><th>PERÍODO</th><th></th></tr></thead><tbody>'+assignments+'</tbody></table></div>':'Sem alocações cadastradas.')+(conflicts.length?'<div class="note"><b>Conflito de capacidade:</b> '+conflicts.map(escHtml).join(" · ")+'</div>':'<div class="note">Nenhuma sobrealocação identificada nas atividades e recursos cadastrados.</div>')+'</div>';
   }
   function triangular(min, mode, maxValue) {
+    if (maxValue <= min) return min;
     const u=Math.random(), c=(mode-min)/(maxValue-min);
     return u<c ? min+Math.sqrt(u*(maxValue-min)*(mode-min)) : maxValue-Math.sqrt((1-u)*(maxValue-min)*(maxValue-mode));
   }
@@ -342,7 +344,8 @@
     baseRender();
     toolbar();
     if (page === "ifc" && ifcModel) setTimeout(() => mountIfcViewer("ifc3d", false), 0);
-    if (page === "bim4d" && ifcModel) setTimeout(() => mountIfcViewer("ifc4d", true), 0);
+    else if (page === "bim4d" && ifcModel) setTimeout(() => mountIfcViewer("ifc4d", true), 0);
+    else disposeViewer();
   }
   window.addEventListener("resize", () => { if (viewer?.renderer && viewer?.container) resizeViewer(); });
 
@@ -501,10 +504,10 @@
     if(b.hasAttribute("data-import-ai")) document.getElementById("ai-file")?.click();
     if(b.hasAttribute("data-compare-ifc")) compareIfcVersions();
     if(b.hasAttribute("data-4d-play")) {
-      const button=b; const timerId=setInterval(()=>{if(page!=="bim4d"){clearInterval(timerId);return;}day=day>=max()?0:day+1;const input=document.getElementById("4d-day");if(input)input.value=day;update4D(day);const label=document.querySelector("#view .sim strong");if(label)label.textContent=date(day);},700);
-      button.textContent="Ⅱ Reproduzindo"; button.dataset.playing="1";
+      if(viewerTimer){clearInterval(viewerTimer);viewerTimer=null;b.textContent="▶ Reproduzir";}
+      else {viewerTimer=setInterval(()=>{if(page!=="bim4d"){clearInterval(viewerTimer);viewerTimer=null;return;}day=day>=max()?0:day+1;const input=document.getElementById("4d-day");if(input)input.value=day;update4D(day);const label=document.querySelector("#view .sim strong");if(label)label.textContent=date(day);},700);b.textContent="Ⅱ Pausar";}
     }
-    if(b.hasAttribute("data-4d-restart")) {day=0;update4D(day);const input=document.getElementById("4d-day");if(input)input.value=0;}
+    if(b.hasAttribute("data-4d-restart")) {if(viewerTimer){clearInterval(viewerTimer);viewerTimer=null;}day=0;update4D(day);const input=document.getElementById("4d-day");if(input)input.value=0;const play=document.querySelector("[data-4d-play]");if(play)play.textContent="▶ Reproduzir";}
     if(b.hasAttribute("data-4d-step")) {day=Math.min(max(),day+1);update4D(day);const input=document.getElementById("4d-day");if(input)input.value=day;}
   });
   document.addEventListener("input", e => {
