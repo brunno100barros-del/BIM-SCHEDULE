@@ -3,6 +3,15 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const source = await readFile(new URL("../public/schedule-enhancements.js", import.meta.url), "utf8");
+const html = await readFile(new URL("../public/demo.html", import.meta.url), "utf8");
+
+test("a demonstração carrega os módulos e liga a página IFC ao renderer correto", () => {
+  assert.match(html, /ifc:ifcPage/);
+  assert.match(html, /<script src="\.\/schedule-enhancements\.js"><\/script>/);
+  for (const binding of ["window.financial=financial", "window.resources=resources", "window.risks=risks", "window.audit=audit", "window.ifcPage=ifcPage", "window.bim=bim", "window.render=render"]) {
+    assert.ok(source.includes(binding), `Vínculo ausente: ${binding}`);
+  }
+});
 
 function extractFunction(name) {
   const marker = `function ${name}(`;
