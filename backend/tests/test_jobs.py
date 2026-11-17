@@ -171,35 +171,127 @@ def test_process_start_failure_marks_job_failed_and_supervisor_continues(runtime
     assert runtime.jobs.wait(next_job["id"])["status"] == "completed"
 
 
+def _upload_ifc(client, project_id, path):
+    with path.open("rb") as handle:
+        response = client.post(f"/api/v1/ifc/project/{project_id}/upload",
+                               files={"file": ("modelo.ifc", handle, "application/octet-stream")})
+    assert response.status_code == 202, response.text
+    return response.json()
+
+
 def test_process_start_failure_runs_abort_hook_for_ifc(client, runtime, monkeypatch, tmp_path):
+    """No exato momento em que a tarefa passa a 'failed', o modelo IFC já está 'failed' e sem elementos.
+
+    Sem atrasos nem consultas repetidas: um listener do SQLAlchemy observa a própria gravação do
+    status terminal da tarefa e, na mesma conexão, lê o estado do modelo IFC naquele instante.
+    """
+    from sqlalchemy import event, text
+
     from ifc_factory import build_ifc
 
-    import app.modules.ifc.jobs as ifc_jobs
+    snapshots = []
+
+    def on_job_update(_mapper, connection, target):
+        if target.status != "failed":
+            return
+        model_id = json.loads(target.params_json or "{}").get("model_id")
+        status = connection.execute(text("SELECT status FROM ifc_models WHERE id = :id"), {"id": model_id}).scalar()
+        elements = connection.execute(text("SELECT COUNT(*) FROM ifc_elements WHERE model_id = :id"), {"id": model_id}).scalar()
+        snapshots.append({"job_id": target.id, "model_status": status, "elements": elements})
 
     monkeypatch.setattr(runtime.jobs, "_mp", FailingStartContext(runtime.jobs._mp, failures=1))
-    # Torna determinística a verificação de ordem: mesmo com uma rotina de consistência lenta,
-    # a tarefa só pode aparecer como encerrada depois que o modelo IFC foi restaurado.
-    original_hook = ifc_jobs.on_parse_aborted
+    event.listen(JobModel, "after_update", on_job_update)
+    try:
+        project_id = client.post("/api/v1/projects/", json={"name": "Falha", "code": "START-FAIL"}).json()["id"]
+        ifc = build_ifc(tmp_path / "modelo.ifc", walls=3)
+        body = _upload_ifc(client, project_id, ifc)
+        final = runtime.jobs.wait(body["job_id"], timeout=15)
+    finally:
+        event.remove(JobModel, "after_update", on_job_update)
 
-    def slow_hook(*args, **kwargs):
-        time.sleep(0.5)
-        return original_hook(*args, **kwargs)
-
-    monkeypatch.setattr(ifc_jobs, "on_parse_aborted", slow_hook)
-    project_id = client.post("/api/v1/projects/", json={"name": "Falha", "code": "START-FAIL"}).json()["id"]
-    ifc = build_ifc(tmp_path / "modelo.ifc", walls=3)
-    with ifc.open("rb") as handle:
-        body = client.post(f"/api/v1/ifc/project/{project_id}/upload",
-                           files={"file": ("modelo.ifc", handle, "application/octet-stream")}).json()
-    final = runtime.jobs.wait(body["job_id"], timeout=15)
     assert final["status"] == "failed"
+    assert snapshots == [{"job_id": body["job_id"], "model_status": "failed", "elements": 0}]
     model = client.get(f"/api/v1/ifc/model/{body['id']}").json()
-    assert model["status"] == "failed"  # abort_hook executado: o modelo não fica "queued"/"processing"
+    assert model["status"] == "failed"
     assert body["job_id"] in model["error_message"]
     assert client.get(f"/api/v1/ifc/model/{body['id']}/elements").json() == []
 
     # Novo envio é processado normalmente pelo mesmo supervisor.
-    with ifc.open("rb") as handle:
-        retry = client.post(f"/api/v1/ifc/project/{project_id}/upload",
-                            files={"file": ("modelo.ifc", handle, "application/octet-stream")}).json()
+    retry = _upload_ifc(client, project_id, ifc)
     assert runtime.jobs.wait(retry["job_id"], timeout=60)["status"] == "completed"
+
+
+def test_abort_hook_failure_is_explicit_in_job_and_log(client, runtime, monkeypatch, tmp_path):
+    import logging
+
+    import app.modules.ifc.jobs as ifc_jobs
+    from ifc_factory import build_ifc
+
+    def broken_hook(*_args, **_kwargs):
+        raise RuntimeError("falha simulada na rotina de consistência")
+
+    records = []
+
+    class Collector(logging.Handler):
+        def emit(self, record):
+            records.append(record)
+
+    collector = Collector(level=logging.ERROR)
+    jobs_logger = logging.getLogger("bim_schedule.jobs")
+    jobs_logger.addHandler(collector)
+    monkeypatch.setattr(ifc_jobs, "on_parse_aborted", broken_hook)
+    monkeypatch.setattr(runtime.jobs, "_mp", FailingStartContext(runtime.jobs._mp, failures=1))
+    try:
+        project_id = client.post("/api/v1/projects/", json={"name": "Hook", "code": "HOOK-FAIL"}).json()["id"]
+        body = _upload_ifc(client, project_id, build_ifc(tmp_path / "m.ifc", walls=2))
+        final = runtime.jobs.wait(body["job_id"], timeout=15)
+    finally:
+        jobs_logger.removeHandler(collector)
+
+    assert final["status"] == "failed"
+    assert final["message"] == "Falhou ao iniciar; a rotina de consistência dos dados também falhou"
+    assert "Não foi possível iniciar o processo da tarefa" in final["error"]
+    assert "RuntimeError: falha simulada na rotina de consistência" in final["error"]
+    assert "ATENÇÃO" in final["error"]
+    hook_logs = [r for r in records if "rotina de consistência" in r.getMessage()]
+    assert hook_logs and hook_logs[0].exc_info is not None  # traceback no log
+    assert any(body["job_id"] in r.getMessage() for r in hook_logs)
+
+    # O supervisor continua atendendo a fila.
+    next_job = runtime.jobs.submit("system.diagnostic", {"steps": 2, "step_seconds": 0.01})
+    assert runtime.jobs.wait(next_job["id"])["status"] == "completed"
+
+
+def test_ifc_abort_hook_is_idempotent(client, db):
+    from app.models.ifc import IfcElementModel, IfcModelModel
+    from app.modules.ifc.jobs import on_parse_aborted
+
+    project_id = client.post("/api/v1/projects/", json={"name": "Idem", "code": "IDEM"}).json()["id"]
+    model = IfcModelModel(project_id=project_id, filename="a.ifc", file_path="/tmp/a.ifc", status="processing",
+                          progress=40, element_count=2)
+    done = IfcModelModel(project_id=project_id, filename="b.ifc", file_path="/tmp/b.ifc", status="completed",
+                         progress=100, element_count=1)
+    db.add_all([model, done]); db.commit()
+    db.add_all([IfcElementModel(model_id=model.id, global_id=f"G{i}", ifc_type="IfcWall") for i in range(2)]
+               + [IfcElementModel(model_id=done.id, global_id="D1", ifc_type="IfcSlab")])
+    db.commit()
+
+    def state():
+        db.expire_all()
+        m = db.get(IfcModelModel, model.id)
+        return (m.status, m.progress, m.element_count, m.processing_message, m.error_message,
+                db.query(IfcElementModel).filter_by(model_id=model.id).count())
+
+    on_parse_aborted(db, job_id="j1", params={"model_id": model.id}, status="failed")
+    first = state()
+    on_parse_aborted(db, job_id="j1", params={"model_id": model.id}, status="failed")
+    assert state() == first
+    assert first[0] == "failed" and first[5] == 0
+
+    # Modelo concluído nunca é alterado; modelo inexistente ou sem model_id não gera erro.
+    on_parse_aborted(db, job_id="j2", params={"model_id": done.id}, status="failed")
+    on_parse_aborted(db, job_id="j3", params={"model_id": 999999}, status="failed")
+    on_parse_aborted(db, job_id="j4", params={}, status="failed")
+    db.expire_all()
+    assert db.get(IfcModelModel, done.id).status == "completed"
+    assert db.query(IfcElementModel).filter_by(model_id=done.id).count() == 1

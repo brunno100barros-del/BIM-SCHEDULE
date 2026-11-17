@@ -299,19 +299,29 @@ class JobManager:
     def _fail_to_start(self, job_id: str, kind: str, params: dict, exc: BaseException) -> None:
         """Registra como ``failed`` uma tarefa cujo processo não pôde ser iniciado.
 
-        O ``abort_hook`` roda primeiro: quando a tarefa aparece como ``failed``, os dados
-        do domínio (por exemplo, o modelo IFC) já foram restaurados.
+        Ordem garantida:
+        1. executa a rotina de consistência do domínio (``abort_hook``) e aguarda o término;
+        2. só então grava o estado terminal ``failed`` com mensagem e erro.
+        Assim, quando a tarefa pode ser consultada como ``failed``, os dados do domínio
+        (por exemplo, o modelo IFC) já foram restaurados. Se a própria rotina falhar, a
+        falha fica explícita no log e no diagnóstico da tarefa.
         """
         detail = str(exc).strip() or exc.__class__.__name__
-        self._run_abort_hook(kind, job_id, params, "failed")
+        hook_error = self._run_abort_hook(kind, job_id, params, "failed")
+        error = (f"Não foi possível iniciar o processo da tarefa ({exc.__class__.__name__}: {detail}). "
+                 "Verifique memória disponível, antivírus e permissões, e tente novamente.")
+        message = "Falhou ao iniciar"
+        if hook_error:
+            message = "Falhou ao iniciar; a rotina de consistência dos dados também falhou"
+            error += (f" ATENÇÃO: a rotina de consistência dos dados falhou ({hook_error}); "
+                      "os registros relacionados podem ter ficado em estado intermediário. Consulte o log.")
         with self._sessions() as db:
             job = db.get(JobModel, job_id)
             if job is None:
                 return
             job.status = "failed"
-            job.message = "Falhou ao iniciar"
-            job.error = (f"Não foi possível iniciar o processo da tarefa ({exc.__class__.__name__}: {detail}). "
-                         "Verifique memória disponível, antivírus e permissões, e tente novamente.")[:2000]
+            job.message = message[:500]
+            job.error = error[:2000]
             job.pid = None
             job.finished_at = utcnow()
             db.commit()
@@ -335,16 +345,24 @@ class JobManager:
         logger.warning("Tarefa %s finalizada pelo supervisor com status %s (exitcode=%s).", job_id, status, exitcode)
         self._run_abort_hook(kind, job_id, params, status)
 
-    def _run_abort_hook(self, kind: str, job_id: str, params: dict, status: str) -> None:
+    def _run_abort_hook(self, kind: str, job_id: str, params: dict, status: str) -> Optional[str]:
+        """Executa a rotina de consistência do tipo de tarefa.
+
+        Retorna ``None`` em caso de sucesso (ou se o tipo não tem rotina) e, em caso de
+        falha, uma descrição do erro, que também é registrada no log com o traceback.
+        As rotinas devem ser idempotentes: podem ser executadas mais de uma vez.
+        """
         try:
             hook_path = get_kind(kind).abort_hook
         except ValueError:
-            return
+            return None
         if not hook_path:
-            return
+            return None
         try:
             hook = resolve(hook_path)
             with self._sessions() as db:
                 hook(db, job_id=job_id, params=params, status=status)
-        except Exception:
-            logger.exception("Falha ao executar a rotina de consistência da tarefa %s", job_id)
+        except Exception as exc:
+            logger.exception("Falha ao executar a rotina de consistência (%s) da tarefa %s", hook_path, job_id)
+            return f"{exc.__class__.__name__}: {str(exc).strip() or 'sem mensagem'}"
+        return None

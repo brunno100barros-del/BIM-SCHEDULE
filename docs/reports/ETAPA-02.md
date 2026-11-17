@@ -135,7 +135,7 @@ Todos os testes abaixo foram **executados**. Os resultados são os observados.
 
 | Conjunto | Ambiente | Resultado |
 |---|---|---|
-| Backend (pytest) | Linux, Python 3.13 (local) | **65 aprovados** (após a revisão; eram 62) |
+| Backend (pytest) | Linux, Python 3.13 (local) | **67 aprovados** (após a revisão; eram 62) |
 | Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12 | Aguardando a execução do CI desta revisão (antes: 62/62) |
 | Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | Aguardando a execução do CI desta revisão (antes: 62/62) |
 | Frontend unitários (Vitest) | local e CI | **12 aprovados** |
@@ -144,7 +144,7 @@ Todos os testes abaixo foram **executados**. Os resultados são os observados.
 | Type check + build de produção | local e CI | Aprovado |
 | `npm ci` a partir do lockfile | local e CI | Aprovado |
 
-Composição dos 65 testes do backend: 20 anteriores (CPM, API, banco) e 45 novos (42 da entrega inicial e 3 da revisão do PR #5).
+Composição dos 67 testes do backend: 20 anteriores (CPM, API, banco) e 47 novos (42 da entrega inicial e 5 da revisão do PR #5).
 - **Tarefas:** progresso; API responsiva durante a tarefa; cancelamento cooperativo; encerramento forçado de tarefa que não responde; falha; morte do processo; cancelamento na fila; desligamento do serviço; recuperação de tarefas interrompidas.
 - **IFC real:** processamento completo, cancelamento sem dados parciais, arquivo corrompido, validações, limite de tamanho, confinamento do arquivo em `uploads/`.
 - **Preservação de dados:** leitura no modo legado; migração validada com hashes intactos e reinício sem nova migração; falha de migração mantendo o local legado; cópia divergente rejeitada; URL explícita; atualização de esquema com backup.
@@ -173,7 +173,18 @@ Composição dos 65 testes do backend: 20 anteriores (CPM, API, banco) e 45 novo
   - `test_process_start_failure_marks_job_failed_and_supervisor_continues`: tarefa `failed` com mensagem e erro, `pid` nulo, nenhum processo ativo, e a tarefa seguinte é concluída.
   - `test_process_start_failure_runs_abort_hook_for_ifc`: envio de IFC real com falha de inicialização deixa o modelo `failed`, com o `job_id` na mensagem e sem elementos; um novo envio é processado normalmente.
   - Contraprova: os dois testes falham com o `manager.py` anterior (a tarefa permanecia `running`).
-- **Ajuste após o CI da revisão:** a primeira versão da correção marcava a tarefa como `failed` *antes* de executar o `abort_hook`. O CI no Ubuntu (execução 44173320438) flagrou a janela em que a tarefa já aparecia encerrada e o modelo IFC ainda estava `queued`. Agora a ordem é: `abort_hook` → tarefa `failed` → liberação da referência ao processo. Quando um cliente vê a tarefa encerrada, os dados já estão consistentes. O teste do IFC passou a tornar a rotina de consistência propositalmente lenta (0,5 s), o que torna a verificação determinística: ele falha com a ordem anterior e passa com a nova.
+- **Ajuste após o CI da revisão** (execução 44173320438, Ubuntu, falhou):
+  - **Causa:** a primeira versão da correção gravava a tarefa como `failed` *antes* de executar o `abort_hook`. Havia uma janela em que um cliente (ou `wait()`) via a tarefa encerrada enquanto o modelo IFC ainda estava `queued`, e o teste consultou o modelo nessa janela.
+  - **Ordem atual em `_fail_to_start()`:**
+    1. executa o `abort_hook` e aguarda o término;
+    2. grava `failed` com mensagem e erro;
+    3. libera a referência ao processo, usada por `wait()` e `active_count()`.
+  - **Falha da própria rotina de consistência:** `_run_abort_hook()` passou a devolver a descrição do erro, além de registrá-lo no log com traceback. A tarefa fica `failed` com a mensagem "Falhou ao iniciar; a rotina de consistência dos dados também falhou" e um erro que inclui a exceção da rotina e um aviso de que os registros relacionados podem ter ficado em estado intermediário. O supervisor continua atendendo a fila.
+  - **Idempotência:** `on_parse_aborted` pode ser executado mais de uma vez com o mesmo resultado. Ela nunca altera um modelo já `completed` e ignora modelo inexistente ou sem `model_id`.
+  - **Testes, sem `sleep`, atrasos artificiais nem consultas repetidas:**
+    - `test_process_start_failure_runs_abort_hook_for_ifc` registra um *listener* do SQLAlchemy na gravação da tarefa e, no exato momento em que o status `failed` é gravado, lê na mesma conexão o status do modelo IFC e a quantidade de elementos. O resultado exigido é `failed` e 0. Contraprova: com a ordem anterior (commit `1b7138d`), o mesmo teste registra `model_status: 'queued'` e falha de forma determinística.
+    - `test_abort_hook_failure_is_explicit_in_job_and_log` cobre a falha da rotina: diagnóstico na tarefa, log com traceback e supervisor ativo.
+    - `test_ifc_abort_hook_is_idempotent` cobre a idempotência.
 
 **2. Electron e CORS** (`docs/architecture/WINDOWS_DESKTOP.md`, seção 3.1, e `ARCHITECTURE.md`)
 
