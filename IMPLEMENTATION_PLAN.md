@@ -1,30 +1,34 @@
-# Plano de implementação até a versão 1.0.0
+# Plano de implementação — BIM SCHEDULE
 
-## Etapa concluída nesta compilação (parcial)
+## Versão 0.5.0-dev — funcionalidades adicionadas
 
-- Fundação CPM/PERT e testes principais.
-- Persistência SQLite com chaves estrangeiras.
-- Migração inicial Alembic.
-- CRUD de projetos, EAP e atividades.
-- Precedências FS/SS/FF/SF e cálculo CPM com prazo.
-- Gantt gráfico inicial.
-- Importação IFC assíncrona básica, estado e progresso por lotes.
-- Associação persistente Activity-GlobalId.
+- Gestão local de projetos e intercâmbio JSON.
+- CPM no navegador com relações FS/SS/FF/SF, lags, detecção de ciclos e caminho crítico.
+- Calendário semanal configurável, feriados e data de início.
+- Financeiro por atividade com EV/PV/AC e indicadores de valor agregado.
+- Cadastro de recursos, alocações e alertas básicos de sobrecarga.
+- PERT triangular e Monte Carlo.
+- Snapshots locais e histórico.
+- Consulta meteorológica de curto prazo.
+- Intercâmbio estruturado com IA com aprovação manual.
+- Visualizador IFC 3D e sobreposição temporal 4D por GlobalId.
+- Comparação inicial de versões IFC e exportação compatível com Excel/PDF.
 
-## Próximas etapas obrigatórias
+## Próximas etapas obrigatórias para produção
 
-1. **Estabilização do núcleo:** cobertura de testes do banco/API, migração de banco legado, auditoria de cascatas, calendários de trabalho, feriados e validação matemática independente.
-2. **Planejamento avançado:** edição de relações no Gantt, marcos, restrições de data, calendário, caminho crítico e folgas por calendário.
-3. **IFC:** validar IFC2x3 e IFC4 com modelos reais; extração de quantidades, pavimentos, propriedades e materiais; gestão de versões e comparação de GlobalIds.
-4. **BIM 4D:** sincronização de atividade/GlobalId/Gantt, estados temporais, player e comparação de cenários.
-5. **Recursos:** cadastro de equipes, equipamentos, materiais, produtividade e conflitos de alocação.
-6. **PERT e cenários:** estimativas otimista, provável e pessimista, cenários isolados e comparação de prazo.
-7. **Financeiro:** orçamento opcional, distribuição temporal, curva S e fluxo de caixa.
-8. **Clima:** importação de dados e distinção entre histórico, sazonalidade e previsão.
-9. **Central Gemini:** exportação/importação estruturada, validação e aprovação manual.
-10. **Auditoria e versionamento:** histórico de versões de cronograma, EAP, parâmetros e modelos IFC.
-11. **Exportação e release:** Excel/PDF, build, instalação limpa Windows, testes integrados e pacote 1.0.0.
+1. **Validação do motor:** testes matemáticos independentes do CPM do navegador e backend; restrições de data, calendários por recurso, feriados locais e exceções.
+2. **IFC:** ensaios com amostras IFC2x3, IFC4 e IFC4x3; modelos grandes; propriedades, quantidades, pavimentos, materiais e tratamento de geometrias inválidas.
+3. **BIM 4D:** seleção bidirecional, ocultação/isolamento de elementos, filtros por disciplina, comparação temporal e desempenho em modelos extensos.
+4. **Recursos:** produtividade, custos de equipe/equipamento/material, histogramas, nivelamento automático e resolução de conflitos.
+5. **Riscos:** correlação entre riscos, calendário climático histórico, produtividade, análise de sensibilidade e validação estatística.
+6. **Financeiro:** linha de base temporal, orçamento distribuído, medições, fluxo de caixa e curva S validada.
+7. **Clima:** histórico sazonal e impacto parametrizado por tipo de serviço, sem paralisação automática.
+8. **Central IA:** integração opcional com provedor, gerenciamento seguro de credenciais, consentimento, limites de uso e aprovação manual.
+9. **Auditoria:** backend central, autenticação, trilha imutável, versões de cronograma/EAP/IFC e comparação detalhada.
+10. **Hospedagem:** publicar API e banco persistente; conectar frontend público com CORS, autenticação, backups e monitoramento.
+11. **Exportação:** XLSX nativo, PDF paginado, relatórios de caminho crítico e pacote de entrega.
+12. **Release:** instalação limpa, testes integrados, teste Windows, acessibilidade e validação de desempenho.
 
-## Critério de release
+## Critério de release 1.0.0
 
-A versão 1.0.0 somente será publicada quando o fluxo completo IFC → EAP → atividades → CPM → Gantt → associação IFC → simulação 4D → persistência/reabertura → exportação estiver validado, além dos módulos complementares definidos no escopo do produto.
+A versão 1.0.0 somente será liberada após validar o fluxo IFC → EAP → atividades → CPM → Gantt → associação IFC → simulação 4D → persistência/reabertura → exportação, além dos módulos complementares e do backend hospedado com dados compartilhados.
