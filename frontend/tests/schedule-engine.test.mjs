@@ -8,6 +8,8 @@ const html = await readFile(new URL("../public/demo.html", import.meta.url), "ut
 test("a demonstração carrega os módulos e liga a página IFC ao renderer correto", () => {
   assert.match(html, /ifc:ifcPage/);
   assert.match(html, /risks,audit,weather,exchange/);
+  assert.ok(source.includes("data-status-day"));
+  assert.ok(source.includes("function calculateEarnedValue"));
   assert.match(html, /<script src="\.\/schedule-enhancements\.js"><\/script>/);
   for (const binding of ["window.financial=financial", "window.resources=resources", "window.risks=risks", "window.audit=audit", "window.ifcPage=ifcPage", "window.bim=bim", "window.weather=weather", "window.exchange=exchange", "window.render=render", "titles.weather", "titles.exchange"]) {
     assert.ok(source.includes(binding), `Vínculo ausente: ${binding}`);
@@ -113,7 +115,7 @@ test("valor agregado calcula PV conforme à data de status e custo real", () => 
   assert.equal(result.ac, 60);
   assert.equal(result.spi, 1);
   assert.equal(result.cpi, 50 / 60);
-  assert.equal(result.eac, 360);
+  assert.ok(Math.abs(result.eac - 360) < 1e-9);
 });
 
 test("valor planejado chega ao orçamento base no término do cronograma", () => {
