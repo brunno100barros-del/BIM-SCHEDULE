@@ -727,6 +727,15 @@
     downloadText("BIM-SCHEDULE-atividades.xls",xml,"application/vnd.ms-excel");
   }
 
+  window.resetBimScheduleProject = function () {
+    applyExt(defaults);
+    ext.projectId = "ADM-001"; ext.projectName = "Edifício Administrativo BIMOFFICE"; ext.projectCode = "ADM-001";
+    ifcModel = null; ifcElements = []; ifcSelected.clear(); lastPert = null;
+    ifcDBDeleteById("project:ADM-001").catch(error => console.warn("Falha ao limpar IFC do projeto modelo:", error));
+    ifcDBDelete().catch(error => console.warn("Falha ao limpar IFC ativo:", error));
+    persistExt();
+  };
+
   // Publica os módulos substitutos para a interface principal (script clássico).
   window.financial=financial; window.resources=resources; window.risks=risks; window.audit=audit;
   window.gantt=gantt; window.ifcPage=ifcPage; window.bim=bim; window.weather=weather; window.exchange=exchange; window.render=render;
