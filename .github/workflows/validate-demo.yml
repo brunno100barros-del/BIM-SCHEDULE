@@ -2,7 +2,7 @@ name: Validate browser demo script
 
 on:
   push:
-    branches: [feature/ifc-browser-schedule-engine]
+    branches: [feature/ifc-browser-schedule-engine, feature/bim-schedule-reimplementation]
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -25,9 +25,14 @@ jobs:
           if not scripts:
               raise SystemExit("No inline script found in demo.html")
           Path("/tmp/bim-schedule-demo.js").write_text(scripts[-1], encoding="utf-8")
+          enhancement = Path("frontend/public/schedule-enhancements.js")
+          if not enhancement.exists():
+              raise SystemExit("schedule-enhancements.js is missing")
           PY
       - name: Check JavaScript syntax
-        run: node --check /tmp/bim-schedule-demo.js
+        run: |
+          node --check /tmp/bim-schedule-demo.js
+          node --check frontend/public/schedule-enhancements.js
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm install --no-audit --no-fund
