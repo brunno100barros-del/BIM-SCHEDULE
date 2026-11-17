@@ -18,7 +18,7 @@ test('abre a aplicação principal (sem iframe nem parâmetro ?connected) conect
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Gerenciamento de Projetos/ })).toBeVisible();
   await expect(page.locator('iframe')).toHaveCount(0);
-  await expect(page.getByText(/^v0\.4\.0-dev/)).toBeVisible(); // versão lida do backend
+  await expect(page.getByText(/^v0\.6\.0-dev/)).toBeVisible(); // versão lida do backend
 });
 
 test('cria um projeto, persiste no banco e o recupera após recarregar', async ({ page, request }) => {

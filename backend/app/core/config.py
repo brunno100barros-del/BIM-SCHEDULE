@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 BACKEND_DIR = Path(__file__).resolve().parents[2]
 """Diretório ``backend/`` do código-fonte (usado para localizar dados legados)."""
 
-APP_VERSION = "0.4.0-dev"
+APP_VERSION = "0.6.0-dev"
 
 
 class Settings(BaseSettings):

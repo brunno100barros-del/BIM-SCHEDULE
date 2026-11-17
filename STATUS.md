@@ -1,4 +1,30 @@
-# Status técnico — BIM SCHEDULE 0.5.0-dev
+# Status de desenvolvimento — BIM SCHEDULE
+
+## 0.6.0-dev — Etapa 2 (arquitetura) — 2026-11-17
+
+Implementado e testado:
+- [x] Aplicação React única conectada ao serviço local, com tela de serviço indisponível e acesso à demonstração.
+- [x] Cliente de API único, erros padronizados e estados de carregamento, erro e sucesso.
+- [x] Backend modular; motor CPM/PERT independente e inalterado.
+- [x] Tarefas em processo separado: progresso, cancelamento, falhas, recuperação. Processamento IFC em segundo plano.
+- [x] Pasta de dados do usuário com migração validada e backups de esquema.
+- [x] Segurança do serviço local (127.0.0.1, TrustedHost, CORS, token opcional).
+- [x] Testes: backend (Linux/Windows), unitários do frontend, ponta a ponta. CI.
+
+Preparado, **não implementado**:
+- [ ] IA local (Ollama/Qwen): só verificação de disponibilidade.
+- [~] IA manual (Claude): exportação do pacote e validação da resposta via API; sem tela e sem aplicação das propostas.
+- [ ] Importação de orçamento, simulação 4D no backend, relatórios: apenas estrutura.
+- [ ] Aplicativo Windows/instalador e funcionamento offline: estratégia documentada.
+- [ ] Edição Web com backend remoto: endereço configurável; sem autenticação ou banco multiusuário.
+
+Detalhes e limitações: `docs/reports/ETAPA-02.md`.
+
+---
+
+Histórico anterior (demonstração estática):
+
+## Demonstração estática — 0.5.0-dev
 
 Atualizado em 17/11/2026. Esta é uma versão de desenvolvimento, não uma liberação de produção.
 
