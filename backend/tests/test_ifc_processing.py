@@ -135,3 +135,42 @@ def test_parser_without_callbacks_keeps_previous_signature():
     params = inspect.signature(ifc_parser.parse_ifc_and_extract).parameters
     assert list(params)[:3] == ["filepath", "model_id", "db_session"]
     assert params["on_progress"].default is None and params["check_cancel"].default is None
+
+
+def test_parser_progress_writes_do_not_deadlock_with_open_transaction(client, runtime, tmp_path):
+    """Regressão (CI Windows, 'database is locked'): o progresso é gravado por outra conexão.
+
+    Com min_interval=0 TODO relatório de progresso grava na tabela jobs, inclusive logo após o
+    DELETE dos elementos anteriores e durante a leitura antes do primeiro lote. O parser não pode
+    manter uma transação de escrita aberta nesses pontos.
+    """
+    import uuid
+
+    from sqlalchemy.orm import sessionmaker
+
+    from app.core.database import create_engine_for_url
+    from app.jobs.context import JobContext
+    from app.models.ifc import IfcModelModel
+    from app.models.job import JobModel
+    from app.modules.ifc.jobs import parse_ifc_job
+
+    project_id = make_project(client, code="LOCK-01")
+    ifc = build_ifc(tmp_path / "lock.ifc", walls=60)  # > 25 produtos: há relatórios antes do 1º lote
+    engine = create_engine_for_url(runtime.storage.database_url, worker=True)
+    factory = sessionmaker(bind=engine, autoflush=False, future=True)
+    try:
+        with factory() as db:
+            model = IfcModelModel(project_id=project_id, filename="lock.ifc", file_path=str(ifc), status="queued")
+            db.add(model); db.commit()
+            model_id = model.id
+            job_id = uuid.uuid4().hex
+            db.add(JobModel(id=job_id, kind="ifc.parse", status="running", params_json="{}"))
+            db.commit()
+        ctx = JobContext(job_id, factory, min_interval=0)  # sem limitação: grava a cada relatório
+        result = parse_ifc_job(ctx, model_id=model_id)
+        assert result["element_count"] == 64  # 60 paredes + 1 laje + terreno, edifício e pavimento
+        with factory() as db:
+            assert db.get(IfcModelModel, model_id).status == "completed"
+            assert db.get(JobModel, job_id).progress == 100
+    finally:
+        engine.dispose()

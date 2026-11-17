@@ -57,6 +57,11 @@ def parse_ifc_and_extract(filepath: str, model_id: int, db_session, *,
         get_materials = None
 
     db_session.query(IfcElementModel).filter(IfcElementModel.model_id == model_id).delete()
+    # Confirma já a remoção: o progresso é gravado por outra conexão (JobContext) e o SQLite
+    # admite um único escritor; manter esta transação aberta bloquearia essas gravações
+    # ("database is locked"). Em falha ou cancelamento, os elementos do modelo são removidos
+    # pela rotina de consistência, como nos lotes já confirmados.
+    db_session.commit()
     batch = []; processed = 0; batch_size = 500
     report(5, f"Modelo aberto: {total} produtos IFC")
     for index, element in enumerate(elements, start=1):

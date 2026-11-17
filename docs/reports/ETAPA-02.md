@@ -135,7 +135,7 @@ Todos os testes abaixo foram **executados**. Os resultados são os observados.
 
 | Conjunto | Ambiente | Resultado |
 |---|---|---|
-| Backend (pytest) | Linux, Python 3.13 (local) | **67 aprovados** (após a revisão; eram 62) |
+| Backend (pytest) | Linux, Python 3.13 (local) | **68 aprovados** (após a revisão; eram 62) |
 | Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12 | Aguardando a execução do CI desta revisão (antes: 62/62) |
 | Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | Aguardando a execução do CI desta revisão (antes: 62/62) |
 | Frontend unitários (Vitest) | local e CI | **12 aprovados** |
@@ -144,7 +144,7 @@ Todos os testes abaixo foram **executados**. Os resultados são os observados.
 | Type check + build de produção | local e CI | Aprovado |
 | `npm ci` a partir do lockfile | local e CI | Aprovado |
 
-Composição dos 67 testes do backend: 20 anteriores (CPM, API, banco) e 47 novos (42 da entrega inicial e 5 da revisão do PR #5).
+Composição dos 68 testes do backend: 20 anteriores (CPM, API, banco) e 48 novos (42 da entrega inicial e 6 da revisão do PR #5).
 - **Tarefas:** progresso; API responsiva durante a tarefa; cancelamento cooperativo; encerramento forçado de tarefa que não responde; falha; morte do processo; cancelamento na fila; desligamento do serviço; recuperação de tarefas interrompidas.
 - **IFC real:** processamento completo, cancelamento sem dados parciais, arquivo corrompido, validações, limite de tamanho, confinamento do arquivo em `uploads/`.
 - **Preservação de dados:** leitura no modo legado; migração validada com hashes intactos e reinício sem nova migração; falha de migração mantendo o local legado; cópia divergente rejeitada; URL explícita; atualização de esquema com backup.
@@ -185,6 +185,11 @@ Composição dos 67 testes do backend: 20 anteriores (CPM, API, banco) e 47 novo
     - `test_process_start_failure_runs_abort_hook_for_ifc` registra um *listener* do SQLAlchemy na gravação da tarefa e, no exato momento em que o status `failed` é gravado, lê na mesma conexão o status do modelo IFC e a quantidade de elementos. O resultado exigido é `failed` e 0. Contraprova: com a ordem anterior (commit `1b7138d`), o mesmo teste registra `model_status: 'queued'` e falha de forma determinística.
     - `test_abort_hook_failure_is_explicit_in_job_and_log` cobre a falha da rotina: diagnóstico na tarefa, log com traceback e supervisor ativo.
     - `test_ifc_abort_hook_is_idempotent` cobre a idempotência.
+- **Defeito encontrado no CI desta revisão** (execução 44174527726, Windows, `test_real_ifc_is_processed_in_background` falhou com `database is locked`). O defeito não estava na mudança da revisão: veio da entrega inicial da Etapa 2.
+  - **Causa:** dentro do processo da tarefa, o parser IFC executava `DELETE` dos elementos anteriores e mantinha essa transação de escrita aberta até confirmar o primeiro lote de 500 elementos. Nesse intervalo, o relatório de progresso (`JobContext.progress`) grava a tabela `jobs` por outra conexão do mesmo processo. O SQLite admite um único escritor, então essa gravação aguardava o tempo limite (10 s) e falhava.
+  - **Por que era intermitente:** a frequência de gravação do progresso é limitada (0,2 s ou 5%). Em máquinas rápidas a gravação logo após o `DELETE` era descartada; no Windows do CI, não. Com modelos reais de mais de 25 produtos, o bloqueio também ocorreria durante a leitura.
+  - **Correção** (`backend/app/modules/ifc/parser.py`): a remoção dos elementos anteriores é confirmada antes da leitura. O comportamento é equivalente, porque a leitura já confirmava por lotes e, em falha ou cancelamento, a rotina de consistência remove os elementos do modelo.
+  - **Teste:** `test_parser_progress_writes_do_not_deadlock_with_open_transaction` executa o parser com `min_interval=0` (todo relatório grava) sobre um IFC real com 64 produtos. É determinístico: com o parser anterior falha com `database is locked`; com a correção passa em menos de 1 s.
 
 **2. Electron e CORS** (`docs/architecture/WINDOWS_DESKTOP.md`, seção 3.1, e `ARCHITECTURE.md`)
 
