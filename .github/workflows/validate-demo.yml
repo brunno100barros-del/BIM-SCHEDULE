@@ -1,0 +1,28 @@
+name: Validate browser demo script
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Extract inline JavaScript
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          html = Path("frontend/public/demo.html").read_text(encoding="utf-8")
+          scripts = re.findall(r"<script>(.*?)</script>", html, flags=re.S)
+          if not scripts:
+              raise SystemExit("No inline script found in demo.html")
+          Path("/tmp/bim-schedule-demo.js").write_text(scripts[-1], encoding="utf-8")
+          PY
+      - name: Check JavaScript syntax
+        run: node --check /tmp/bim-schedule-demo.js
