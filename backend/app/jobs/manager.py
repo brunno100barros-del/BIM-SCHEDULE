@@ -254,10 +254,14 @@ class JobManager:
         except Exception as exc:
             # Sem processo não há quem finalize a tarefa: registra a falha aqui para que
             # ela não fique "running" indefinidamente. O supervisor segue para a próxima.
-            with self._lock:
-                self._processes.pop(job_id, None)
+            # A referência só é liberada depois da finalização, para que wait() e os
+            # clientes não vejam a tarefa encerrada antes de os dados ficarem consistentes.
             logger.exception("Falha ao iniciar o processo da tarefa %s (%s)", job_id, kind)
-            self._fail_to_start(job_id, kind, params, exc)
+            try:
+                self._fail_to_start(job_id, kind, params, exc)
+            finally:
+                with self._lock:
+                    self._processes.pop(job_id, None)
             return
         try:
             with self._sessions() as db:
@@ -293,8 +297,13 @@ class JobManager:
         return False
 
     def _fail_to_start(self, job_id: str, kind: str, params: dict, exc: BaseException) -> None:
-        """Registra como ``failed`` uma tarefa cujo processo não pôde ser iniciado."""
+        """Registra como ``failed`` uma tarefa cujo processo não pôde ser iniciado.
+
+        O ``abort_hook`` roda primeiro: quando a tarefa aparece como ``failed``, os dados
+        do domínio (por exemplo, o modelo IFC) já foram restaurados.
+        """
         detail = str(exc).strip() or exc.__class__.__name__
+        self._run_abort_hook(kind, job_id, params, "failed")
         with self._sessions() as db:
             job = db.get(JobModel, job_id)
             if job is None:
@@ -306,7 +315,6 @@ class JobManager:
             job.pid = None
             job.finished_at = utcnow()
             db.commit()
-        self._run_abort_hook(kind, job_id, params, "failed")
 
     def _finalize(self, job_id: str, kind: str, params: dict, exitcode: Optional[int], forced: bool) -> None:
         with self._sessions() as db:

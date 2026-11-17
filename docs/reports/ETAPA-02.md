@@ -173,6 +173,7 @@ Composição dos 65 testes do backend: 20 anteriores (CPM, API, banco) e 45 novo
   - `test_process_start_failure_marks_job_failed_and_supervisor_continues`: tarefa `failed` com mensagem e erro, `pid` nulo, nenhum processo ativo, e a tarefa seguinte é concluída.
   - `test_process_start_failure_runs_abort_hook_for_ifc`: envio de IFC real com falha de inicialização deixa o modelo `failed`, com o `job_id` na mensagem e sem elementos; um novo envio é processado normalmente.
   - Contraprova: os dois testes falham com o `manager.py` anterior (a tarefa permanecia `running`).
+- **Ajuste após o CI da revisão:** a primeira versão da correção marcava a tarefa como `failed` *antes* de executar o `abort_hook`. O CI no Ubuntu (execução 44173320438) flagrou a janela em que a tarefa já aparecia encerrada e o modelo IFC ainda estava `queued`. Agora a ordem é: `abort_hook` → tarefa `failed` → liberação da referência ao processo. Quando um cliente vê a tarefa encerrada, os dados já estão consistentes. O teste do IFC passou a tornar a rotina de consistência propositalmente lenta (0,5 s), o que torna a verificação determinística: ele falha com a ordem anterior e passa com a nova.
 
 **2. Electron e CORS** (`docs/architecture/WINDOWS_DESKTOP.md`, seção 3.1, e `ARCHITECTURE.md`)
 

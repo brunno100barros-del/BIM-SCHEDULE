@@ -174,7 +174,18 @@ def test_process_start_failure_marks_job_failed_and_supervisor_continues(runtime
 def test_process_start_failure_runs_abort_hook_for_ifc(client, runtime, monkeypatch, tmp_path):
     from ifc_factory import build_ifc
 
+    import app.modules.ifc.jobs as ifc_jobs
+
     monkeypatch.setattr(runtime.jobs, "_mp", FailingStartContext(runtime.jobs._mp, failures=1))
+    # Torna determinística a verificação de ordem: mesmo com uma rotina de consistência lenta,
+    # a tarefa só pode aparecer como encerrada depois que o modelo IFC foi restaurado.
+    original_hook = ifc_jobs.on_parse_aborted
+
+    def slow_hook(*args, **kwargs):
+        time.sleep(0.5)
+        return original_hook(*args, **kwargs)
+
+    monkeypatch.setattr(ifc_jobs, "on_parse_aborted", slow_hook)
     project_id = client.post("/api/v1/projects/", json={"name": "Falha", "code": "START-FAIL"}).json()["id"]
     ifc = build_ifc(tmp_path / "modelo.ifc", walls=3)
     with ifc.open("rb") as handle:
