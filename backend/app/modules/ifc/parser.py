@@ -1,15 +1,39 @@
-"""Leitura IFC isolada do ciclo HTTP, com progresso persistido por lotes."""
+"""Leitura IFC isolada do ciclo HTTP, com progresso persistido por lotes.
+
+Executada dentro do processo de tarefa (``app.modules.ifc.jobs``). Os parâmetros
+opcionais permitem informar progresso e verificar cancelamento cooperativo; sem
+eles, o comportamento é o mesmo da versão anterior.
+"""
 import json
+from typing import Callable, Optional
+
+ProgressCallback = Callable[[float, str], None]
+CancelCheck = Callable[[], None]
+
+CANCEL_CHECK_EVERY = 25  # elementos entre verificações de cancelamento
 
 
-def parse_ifc_and_extract(filepath: str, model_id: int, db_session):
+def parse_ifc_and_extract(filepath: str, model_id: int, db_session, *,
+                          on_progress: Optional[ProgressCallback] = None,
+                          check_cancel: Optional[CancelCheck] = None):
+    def report(percent: float, message: str) -> None:
+        if on_progress:
+            on_progress(percent, message)
+
+    def cancel_point() -> None:
+        if check_cancel:
+            check_cancel()
+
     try:
         import ifcopenshell
     except ImportError as exc:
         raise RuntimeError("IfcOpenShell não está instalado. Execute install.bat novamente.") from exc
 
     from app.models.ifc import IfcElementModel, IfcModelModel
+    cancel_point()
+    report(1, "Abrindo o arquivo IFC")
     ifc_file = ifcopenshell.open(filepath)
+    cancel_point()
     schema_name = getattr(ifc_file, "schema", None)
     elements = ifc_file.by_type("IfcProduct")
     total = len(elements)
@@ -34,7 +58,11 @@ def parse_ifc_and_extract(filepath: str, model_id: int, db_session):
 
     db_session.query(IfcElementModel).filter(IfcElementModel.model_id == model_id).delete()
     batch = []; processed = 0; batch_size = 500
+    report(5, f"Modelo aberto: {total} produtos IFC")
     for index, element in enumerate(elements, start=1):
+        if index % CANCEL_CHECK_EVERY == 0:
+            cancel_point()
+            report(5 + index / max(total, 1) * 90, f"Lendo {index} de {total} produtos IFC")
         global_id = getattr(element, "GlobalId", None)
         if global_id:
             psets, qtos, materials, storey_name = {}, {}, [], None
@@ -71,6 +99,8 @@ def parse_ifc_and_extract(filepath: str, model_id: int, db_session):
                 model.progress = min(95, int(index / max(total, 1) * 95))
                 model.processing_message = f"Lidos {index} de {total} produtos IFC"
             db_session.commit()
+            report(5 + index / max(total, 1) * 90, f"Lidos {index} de {total} produtos IFC")
+    cancel_point()
     if batch:
         db_session.bulk_save_objects(batch); processed += len(batch)
     model = db_session.query(IfcModelModel).filter(IfcModelModel.id == model_id).first()
