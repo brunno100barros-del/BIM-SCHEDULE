@@ -157,6 +157,6 @@ document.getElementById('view').addEventListener('input',e=>{if(e.target.id==='i
 document.getElementById('view').addEventListener('submit',e=>{if(e.target.id==='form'){e.preventDefault();add(e.target)}});
 document.getElementById('search').addEventListener('input',e=>{query=e.target.value;if(page==='wbs'||page==='gantt')render()});
 document.getElementById('theme').addEventListener('click',()=>{theme=theme==='dark'?'light':'dark';document.documentElement.dataset.theme=theme;localStorage.setItem('bimschedule.theme',theme);document.getElementById('theme').textContent=theme==='dark'?'☼':'☾'});
-document.getElementById('reset').addEventListener('click',()=>{if(!confirm('Restaurar o projeto modelo e apagar as alterações locais?'))return;state={activities:seed.map(a=>({...a})),audit:seedAudit.slice()};selected=3;day=18;showForm=false;save();render();notify('Projeto modelo restaurado.')});
+document.getElementById('reset').addEventListener('click',()=>{if(!confirm('Restaurar o projeto modelo e apagar as alterações locais?'))return;state={activities:seed.map(a=>({...a})),audit:seedAudit.slice()};selected=3;day=18;showForm=false;if(window.resetBimScheduleProject)window.resetBimScheduleProject();save();render();notify('Projeto modelo restaurado.')});
 document.getElementById('export').addEventListener('click',csv);restoreIfc().then(()=>{if(ifcModel&&page==='ifc')render()});document.getElementById('new').addEventListener('click',()=>{page='gantt';showForm=true;render()});render();
 </script><script src="./schedule-enhancements.js"></script></body></html>
