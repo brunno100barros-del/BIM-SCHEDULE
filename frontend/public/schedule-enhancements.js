@@ -86,9 +86,14 @@
         ifcModel = legacy; ifcElements = legacy.elements;
         await ifcDBPut({ ...legacy, id: "project:" + ext.projectId });
       } else {
-        ifcModel = null; ifcElements = [];
+        const savedProject = currentProject();
+        if (savedProject?.ifc) {
+          ifcModel = { id: "active", name: savedProject.ifc.name, schema: savedProject.ifc.schema, uploadedAt: savedProject.ifc.uploadedAt, elements: [], mappings: savedProject.ifc.mappings || {}, file: null };
+          ifcElements = [];
+        } else { ifcModel = null; ifcElements = []; }
       }
     } catch (error) {
+      ifcModel = null; ifcElements = [];
       console.warn("Não foi possível restaurar o IFC deste projeto:", error);
     }
   }
@@ -288,6 +293,10 @@
         ifcElements = p.ifc.elements;
         ifcModel = { id: "active", name: p.ifc.name, schema: p.ifc.schema, uploadedAt: p.ifc.uploadedAt, elements: ifcElements, mappings: p.ifc.mappings || {}, file: null };
         notifyUser("Inventário IFC e vínculos importados. Para visualizar a geometria 3D, reimporte o arquivo IFC original.");
+      } else if (p.ifc) {
+        ifcElements = Array.isArray(p.ifc.elements) ? p.ifc.elements : [];
+        ifcModel = { id: "active", name: p.ifc.name, schema: p.ifc.schema, uploadedAt: p.ifc.uploadedAt, elements: ifcElements, mappings: p.ifc.mappings || {}, file: null };
+        notifyUser("Metadados IFC e vínculos importados. Reimporte o arquivo IFC original para carregar a geometria 3D.");
       } else { ifcModel = null; ifcElements = []; }
       persistProject(); persistExt(); baseSave(); refreshProjectSelect(); render();
     } catch (error) { notifyUser("Falha ao abrir projeto: " + error.message); }
