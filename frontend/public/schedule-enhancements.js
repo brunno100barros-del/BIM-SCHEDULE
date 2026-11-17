@@ -81,17 +81,15 @@
       if (saved && Array.isArray(saved.elements)) {
         ifcModel = saved; ifcElements = saved.elements; return;
       }
+      const savedProject = currentProject();
       const legacy = await ifcDBGet();
-      if (legacy && legacy.file && Array.isArray(legacy.elements)) {
+      if (legacy && legacy.file && Array.isArray(legacy.elements) && (!savedProject?.ifc || savedProject.ifc.name === legacy.name)) {
         ifcModel = legacy; ifcElements = legacy.elements;
         await ifcDBPut({ ...legacy, id: "project:" + ext.projectId });
-      } else {
-        const savedProject = currentProject();
-        if (savedProject?.ifc) {
-          ifcModel = { id: "active", name: savedProject.ifc.name, schema: savedProject.ifc.schema, uploadedAt: savedProject.ifc.uploadedAt, elements: [], mappings: savedProject.ifc.mappings || {}, file: null };
-          ifcElements = [];
-        } else { ifcModel = null; ifcElements = []; }
-      }
+      } else if (savedProject?.ifc) {
+        ifcModel = { id: "active", name: savedProject.ifc.name, schema: savedProject.ifc.schema, uploadedAt: savedProject.ifc.uploadedAt, elements: [], mappings: savedProject.ifc.mappings || {}, file: null };
+        ifcElements = [];
+      } else { ifcModel = null; ifcElements = []; }
     } catch (error) {
       ifcModel = null; ifcElements = [];
       console.warn("Não foi possível restaurar o IFC deste projeto:", error);
@@ -313,6 +311,7 @@
       const deletedProjectId = ext.projectId;
       projectStore = projectStore.filter(p => p.id !== deletedProjectId); localStorage.setItem(PROJECTS_KEY, JSON.stringify(projectStore));
       ifcDBDeleteById("project:" + deletedProjectId).catch(error => console.warn("Falha ao excluir o IFC do projeto:", error));
+      ifcDBDelete().catch(error => console.warn("Falha ao limpar o IFC ativo:", error));
       ifcModel = null; ifcElements = [];
       notifyUser("Projeto removido da lista local. O projeto modelo será carregado.");
       applyExt(defaults);
