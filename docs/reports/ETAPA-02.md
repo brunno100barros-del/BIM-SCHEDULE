@@ -136,8 +136,8 @@ Todos os testes abaixo foram **executados**. Os resultados são os observados.
 | Conjunto | Ambiente | Resultado |
 |---|---|---|
 | Backend (pytest) | Linux, Python 3.13 (local) | **79 aprovados** (após a Fase 0; eram 62 na entrega e 68 após a revisão) |
-| Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12.16 | Aguardando o CI da Fase 0 (antes: 68/68 em `27becbf`) |
-| Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | Aguardando o CI da Fase 0 (antes: 68/68 em `27becbf`) |
+| Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12.16 | **79 aprovados** (execução 44182903560, commit `563d6d0`) |
+| Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | **79 aprovados** (execuções 44182903560 e 44182894103, commit `563d6d0`; valida `spawn`, caminhos e reinício do serviço no Windows) |
 | Frontend unitários (Vitest) | local e CI | **12 aprovados** |
 | Motor da demonstração (node:test) | local e CI | **9 aprovados** |
 | Ponta a ponta (Playwright, Chromium) | local e CI | **8 aprovados** (CI: execução 44175636745) |
@@ -148,7 +148,7 @@ Histórico do CI durante a revisão do PR #5:
 - `1b7138d` falhou (Ubuntu): ordem `failed` → `abort_hook`. Corrigido.
 - `f64018c` falhou (Windows): bloqueio do SQLite no parser IFC. Corrigido.
 - `27becbf` passou nos três jobs: backend Ubuntu e Windows, e frontend com unitários, build e e2e. Execuções 44175636745 (pull_request) e 44175624093 (push).
-- Fase 0 (J1–J6): aguardando o CI.
+- Fase 0 (J1–J6), `563d6d0`: passou em todos os jobs. Backend Ubuntu 79/79, backend Windows 79/79, frontend com unitários, build e e2e; validação da demonstração também passou. Execuções 44182903560 (pull_request) e 44182894103 (push).
 
 Composição dos 79 testes do backend: 20 anteriores (CPM, API, banco) e 59 novos (42 da entrega inicial, 6 da revisão do PR #5 e 11 da Fase 0).
 - **Tarefas:** progresso; API responsiva durante a tarefa; cancelamento cooperativo; encerramento forçado de tarefa que não responde; falha; morte do processo; cancelamento na fila; desligamento do serviço; recuperação de tarefas interrompidas.
