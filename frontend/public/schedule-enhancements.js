@@ -247,6 +247,7 @@
     if (!name || !name.trim()) return;
     const code = prompt("Código do novo projeto:", "PRJ-" + Date.now().toString().slice(-6));
     if (!code || !code.trim()) return;
+    if (projectStore.some(p => p.id === code.trim())) return notifyUser("Já existe um projeto com esse código. Escolha outro identificador.");
     ext.projectId = code.trim(); ext.projectName = name.trim(); ext.projectCode = code.trim();
     if (ifcModel && ifcModel.file) await ifcDBPut({ ...ifcModel, id: "project:" + ext.projectId });
     persistProject(); persistExt(); refreshProjectSelect(); notifyUser("Cópia local criada. As atividades e o vínculo IFC foram preservados.");
@@ -265,7 +266,7 @@
         ifcModel = { id: "active", name: p.ifc.name, schema: p.ifc.schema, uploadedAt: p.ifc.uploadedAt, elements: ifcElements, mappings: p.ifc.mappings || {}, file: null };
         notifyUser("Metadados IFC e vínculos importados. Reimporte o arquivo IFC original para carregar a geometria 3D.");
       } else { ifcModel = null; ifcElements = []; }
-    } catch (error) { notifyUser("Projeto aberto, mas não foi possível recuperar o IFC: " + error.message); }
+    } catch (error) { ifcModel = null; ifcElements = []; notifyUser("Projeto aberto, mas não foi possível recuperar o IFC: " + error.message); }
     persistExt(); baseSave(); refreshProjectSelect(); render();
   }
   function exportProject() {
@@ -279,7 +280,7 @@
       if (!p || !Array.isArray(p.activities) || !p.code) throw new Error("Arquivo não reconhecido como projeto BIM SCHEDULE.");
       if (!confirm("Importar " + (p.name || p.code) + " e substituir o projeto atualmente aberto?")) return;
       ext.projectId = p.id || p.code; ext.projectName = p.name || p.code; ext.projectCode = p.code;
-      Object.assign(ext, p.ext || {}); ext.projectId = p.id || p.code; ext.projectName = p.name || p.code; ext.projectCode = p.code;
+      applyExt(p.ext || {}); ext.projectId = p.id || p.code; ext.projectName = p.name || p.code; ext.projectCode = p.code;
       state.activities = p.activities; state.audit = p.audit || [];
       const saved = await ifcDBGetById("project:" + ext.projectId).catch(() => null);
       if (saved && Array.isArray(saved.elements)) { ifcModel = saved; ifcElements = saved.elements; }
@@ -443,10 +444,10 @@
   async function loadViewerEngine() {
     if (viewerPromise) return viewerPromise;
     viewerPromise = (async () => {
-      const THREE = await import("https://esm.sh/three@0.160.0");
+      const THREE = await import("https://esm.sh/three@0.149.0");
       const [loaderModule, controlsModule] = await Promise.all([
         import("https://esm.sh/web-ifc-three@0.0.126/IFCLoader?external=three"),
-        import("https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js")
+        import("https://esm.sh/three@0.149.0/examples/jsm/controls/OrbitControls.js")
       ]);
       if (!loaderModule.IFCLoader || !controlsModule.OrbitControls) throw new Error("Dependências do visualizador IFC incompatíveis.");
       return { THREE, IFCLoader: loaderModule.IFCLoader, OrbitControls: controlsModule.OrbitControls };
@@ -497,7 +498,7 @@
       controls = new OrbitControls(camera, renderer.domElement);
       container.replaceChildren(renderer.domElement);
       const loader = new IFCLoader();
-      loader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.78/");
+      loader.ifcManager.setWasmPath("https://cdn.jsdelivr.net/npm/web-ifc@0.0.39/");
       objectUrl = URL.createObjectURL(ifcModel.file);
       const model = await loader.loadAsync(objectUrl);
       if (generation !== viewerGeneration || !container.isConnected) {
