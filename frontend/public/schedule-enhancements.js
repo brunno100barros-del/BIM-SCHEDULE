@@ -453,10 +453,10 @@
   async function loadViewerEngine() {
     if (viewerPromise) return viewerPromise;
     viewerPromise = (async () => {
-      const THREE = await import("https://esm.sh/three@0.149.0");
+      const THREE = await import("https://esm.sh/three@0.160.0");
       const [loaderModule, controlsModule] = await Promise.all([
         import("https://esm.sh/web-ifc-three@0.0.126/IFCLoader?external=three"),
-        import("https://esm.sh/three@0.149.0/examples/jsm/controls/OrbitControls.js")
+        import("https://esm.sh/three@0.160.0/examples/jsm/controls/OrbitControls.js")
       ]);
       if (!loaderModule.IFCLoader || !controlsModule.OrbitControls) throw new Error("Dependências do visualizador IFC incompatíveis.");
       return { THREE, IFCLoader: loaderModule.IFCLoader, OrbitControls: controlsModule.OrbitControls };
