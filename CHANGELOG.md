@@ -16,3 +16,13 @@
 
 ## 1.0.0
 Ainda não publicada. Será atribuída somente após cumprir e validar os critérios de aceitação da versão 1.0.
+
+## 0.5.0-dev — 2026-11-17
+- Adicionados módulos web locais para CPM/Gantt, custos, recursos, PERT/Monte Carlo, clima, intercâmbio JSON com IA e snapshots.
+- Adicionada gestão de projetos com salvar, salvar como, abrir, excluir e backup JSON.
+- Integrada leitura IFC existente com viewer 3D experimental e simulação 4D por GlobalId.
+- Adicionado arquivamento local e comparação inicial de versões IFC por GlobalId.
+- Corrigida a rota de renderização do módulo IFC.
+- Adicionados testes Node de regressão para relações CPM, folgas, lags, ciclos e smoke checks.
+- Alinhadas as dependências Three.js ao peer dependency do web-ifc-three 0.0.126.
+- Mantidos como pendentes o backend hospedado, colaboração multiusuário, viewer IFC moderno, XLSX/PDF nativos e validação IFC ponta a ponta.

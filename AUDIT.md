@@ -49,3 +49,29 @@ Inspeção estática dos arquivos entregues, execução dos testes Python existe
 ## Classificação
 
 Esta compilação é `0.3.0-dev`. Não deve ser apresentada como versão 1.0.0 de produção.
+
+
+## Complemento da auditoria — interface 0.5.0-dev
+
+A linha anterior deste documento registra a auditoria da compilação 0.3.0-dev e não descreve o estado atual desta branch.
+
+### Implementações adicionadas na branch de reimplementação
+
+- Módulos web de CPM/Gantt, financeiro, recursos, PERT/Monte Carlo, clima, intercâmbio JSON com IA e snapshots locais.
+- Gestão de projetos no navegador, com arquivos JSON e IndexedDB separado para modelos IFC.
+- Correção do vínculo da navegação IFC ao renderer da página.
+- Viewer 3D experimental e simulação temporal 4D por GlobalId.
+- Testes de regressão para o motor CPM do navegador e smoke checks de integração.
+- Ajuste da dependência Three.js para a faixa compatível com `web-ifc-three@0.0.126`.
+
+### Riscos e limites mantidos
+
+- A implementação de viewer usa `web-ifc-three@0.0.126`, biblioteca antiga/depreciada; deve ser substituída por That Open Components antes de produção.
+- A versão 3D depende de CDN, WebGL e compatibilidade real entre o parser de metadados e o carregador geométrico.
+- Os testes adicionados cobrem o motor CPM e integração estática, não comprovam abertura de arquivos IFC reais.
+- Os módulos financeiros, recursos, PERT, clima e IA possuem as aproximações descritas em `STATUS.md`.
+- GitHub Pages continua estático; backend não está hospedado e não há sincronização multiusuário.
+
+### Critério de validação desta branch
+
+O resultado de build, testes Node e workflow deve ser consultado no GitHub Actions. A validação geométrica IFC e a execução manual permanecem pendentes mesmo se o CI passar.

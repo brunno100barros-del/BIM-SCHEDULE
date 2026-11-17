@@ -1,26 +1,66 @@
-# BIM SCHEDULE — interface demonstrativa
+# BIM SCHEDULE — planejamento e controle BIM
 
-A aplicação web independente do ecossistema BIMOFFICE abre no Projeto Modelo Edifício Administrativo BIMOFFICE (ADM-001), com identidade visual inspirada no sistema Industrial Precision do COORDIX: IBM Plex, grafite, cobre, linhas técnicas, símbolo vetorial e temas claro/escuro.
+Aplicação web do ecossistema BIMOFFICE para organizar EAP, atividades, precedências, cronograma, custos, recursos e vínculos com modelos IFC. A interface segue a identidade Industrial Precision do COORDIX.
 
-## O que é possível testar
-- Importar arquivos IFC diretamente no navegador com Web-IFC/WebAssembly (sem upload do arquivo para um servidor), indexar GlobalIds e entidades construtivas, pesquisar elementos e vinculá-los às atividades; o arquivo e o índice ficam no IndexedDB do navegador.
-- Exportar inventário IFC em CSV com GlobalIds e atividades vinculadas.
-- Navegação por Visão Geral, EAP, Cronograma Gantt, Ambiente BIM 4D esquemático, Custos/Curva S, Recursos, Cenários/Riscos e Histórico.
-- Editar avanço e duração de atividades.
-- Cadastrar atividades de exemplo e recalcular a sequência FS de referência.
-- Filtrar atividades, reproduzir a linha do tempo e exportar CSV.
-- Alternar tema claro/escuro.
-- Salvar alterações do projeto modelo no localStorage do navegador e restaurar a versão original.
+## O que está implementado na versão de desenvolvimento
 
-## Limites importantes
-Os dados do Projeto Modelo são demonstrativos e locais. Ao importar um IFC real, o SCHEDULE lê metadados/GlobalIds e permite vinculá-los às atividades; a classificação de disciplina é uma sugestão heurística que exige revisão. O painel 3D ainda é esquemático: esta etapa não renderiza a geometria IFC nem executa simulação 4D espacial. Os indicadores financeiros/PERT continuam ilustrativos. A demonstração não representa BIM 4D real, CPM completo ou módulos financeiros validados. A área Ambiente conectado preserva a interface anterior ligada à API para projetos, EAP, Gantt e importação IFC.
+### Projeto e planejamento
+- Criar cópia, salvar, abrir, excluir, importar e exportar projetos JSON no navegador.
+- Gerenciar atividades, duração, avanço, orçamento e precedências.
+- Motor CPM no navegador com relações FS, SS, FF e SF, lags positivos/negativos, caminho crítico, folgas e validação de ciclos.
+- Calendário de trabalho configurável com dias da semana, feriados e data-base.
+- Cronograma Gantt recalculado a partir da rede de precedências.
 
-## Executar
-1. Extraia o projeto.
-2. Execute install.bat.
-3. Execute start.bat.
-4. Acesse http://127.0.0.1:3000.
+### BIM e IFC
+- Importação de IFC local pelo Web-IFC, com indexação de entidades, nomes e GlobalIds.
+- Busca, seleção e associação de GlobalIds a atividades.
+- Inventário e associações exportáveis em CSV.
+- Armazenamento do arquivo IFC no IndexedDB do navegador, separado dos dados leves do projeto.
+- Visualizador geométrico IFC 3D experimental e simulação 4D por atividade/GlobalId.
+- Arquivamento de versões e comparação inicial de GlobalIds adicionados/removidos.
 
-Frontend: http://127.0.0.1:3000 · Backend: http://127.0.0.1:8000 · Swagger: http://127.0.0.1:8000/docs.
+### Controle e análise
+- Custos por atividade, custo real informado, EV, PV linear aproximado calculado por data de status, AC, SPI, CPI e EAC.
+- Cadastro de recursos, alocação às atividades e alerta básico de sobrealocação.
+- Estimativas otimista, mais provável e pessimista; PERT e Monte Carlo com distribuição triangular.
+- Consulta de previsão meteorológica pelo Open-Meteo, sem chave de API.
+- Intercâmbio de contexto/sugestões em JSON com IA externa e aprovação manual.
+- Histórico e snapshots locais, incluindo dados financeiros, calendário, recursos e vínculos IFC.
+- Exportação SpreadsheetML compatível com Excel e impressão do navegador para PDF.
 
-Consulte STATUS.md, AUDIT.md, IMPLEMENTATION_PLAN.md e TEST_REPORT.md para as limitações da versão conectada.
+## Como testar online
+
+1. Abra a GitHub Page: https://brunno100barros-del.github.io/BIM-SCHEDULE/
+2. Na barra superior, use **Salvar como** para criar uma cópia do projeto modelo.
+3. Em **Cronograma Gantt**, altere atividades e cadastre relações FS/SS/FF/SF; clique em **Recalcular CPM**.
+4. Em **Modelo IFC**, selecione um arquivo IFC e clique em **Processar IFC**. Aguarde a barra de progresso e confira o inventário.
+5. Selecione elementos e vincule-os a atividades; depois confira a simulação em **Ambiente BIM 4D**.
+6. Informe custos reais em **Custos e Curva S**, cadastre recursos e rode o cenário PERT.
+7. Salve o projeto e exporte o JSON para backup.
+
+A página online só será atualizada depois que as alterações forem integradas à branch `main` e o workflow de GitHub Pages concluir o deploy.
+
+## Limitações que não devem ser confundidas com funcionalidades prontas
+
+- **Armazenamento:** projetos, IFC, recursos, custos e snapshots ficam no navegador/dispositivo atual. Não há sincronização multiusuário, login ou banco central hospedado.
+- **Backend:** a API FastAPI existente é executada localmente. A GitHub Page é estática e ainda não está conectada a uma API hospedada.
+- **Visualizador IFC:** o viewer usa `web-ifc-three` 0.0.126, uma biblioteca antiga/depreciada. O carregamento 3D é experimental e precisa de validação com modelos reais IFC2x3, IFC4 e IFC4x3, além de modelos grandes. O leitor de metadados e o viewer geométrico são fluxos diferentes.
+- **BIM 4D:** a cor temporal depende de GlobalIds associados às atividades. Não há ainda seleção bidirecional completa, isolamento avançado, diff geométrico ou quantitativos por fase.
+- **CPM:** o motor calcula a rede em dias de trabalho relativos; o calendário converte posições em datas. Ainda faltam calendários por recurso, restrições avançadas e testes independentes de todos os casos especiais.
+- **Custos:** PV é aproximado por distribuição linear do orçamento ao longo da duração. AC é informado pelo usuário. Não substitui medição, apropriação contábil, orçamento distribuído ou fluxo de caixa.
+- **Recursos:** existe cadastro, alocação e alerta de conflitos básicos. Não há nivelamento automático, produtividade ou composição detalhada de custos.
+- **Riscos:** Monte Carlo usa distribuições triangulares independentes. Não há correlação entre riscos nem modelo de produtividade/clima.
+- **Clima:** previsão de curto prazo, não série histórica sazonal nem decisão automática de paralisação.
+- **IA:** não existe chamada direta a Gemini, Claude ou OpenAI. O módulo exporta contexto JSON e importa sugestões para revisão manual, sem chave de API.
+- **Exportação:** a planilha é SpreadsheetML com extensão .xls, não XLSX nativo. PDF usa o diálogo de impressão do navegador.
+- **Auditoria:** histórico e snapshots são locais e editáveis, não trilha imutável corporativa.
+
+## Execução local
+
+1. Extraia o repositório.
+2. Execute `install.bat`.
+3. Execute `start.bat`.
+4. Acesse `http://127.0.0.1:3000`.
+5. API local: `http://127.0.0.1:8000`; documentação: `http://127.0.0.1:8000/docs`.
+
+Consulte `STATUS.md`, `IMPLEMENTATION_PLAN.md`, `AUDIT.md` e `TEST_REPORT.md` antes de usar em um projeto real.

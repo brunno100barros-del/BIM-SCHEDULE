@@ -1,34 +1,40 @@
-# Relatório de testes — BIM SCHEDULE 0.3.0-dev
+# Relatório de testes — BIM SCHEDULE 0.5.0-dev
 
-Data: 2026-11-17.
+## Testes adicionados nesta alteração
 
-## Testes executados
+O comando `npm run test:schedule` executa testes Node nativos sobre as funções CPM efetivamente usadas pela interface e verifica os vínculos entre os módulos e a página demonstrativa.
 
-| Verificação | Resultado |
-|---|---|
-| Testes unitários CPM/PERT | 13 cenários aprovados |
-| Testes API de projetos, EAP, atividades e precedências | 6 cenários aprovados |
-| Teste de configuração de chaves estrangeiras SQLite | 1 aprovado |
-| Total da suíte pytest | 20 aprovados |
-| `python -m compileall` no backend | Aprovado |
-| `alembic upgrade head` em banco SQLite limpo | Aprovado |
-| Migração simulada de esquema legado, preservando registros | Aprovado |
-| Transpilação sintática TypeScript/TSX | 13 arquivos, zero diagnósticos de sintaxe |
-| `npm install` | Não concluído: registry npm inacessível por DNS até o limite de tempo |
-| `npm run build` | Não executado; dependências não foram instaladas |
-| Teste IFC ponta a ponta | Não executado; IfcOpenShell ausente no ambiente |
-| Scripts BAT em Windows | Não executados neste ambiente |
+**9 testes automatizados** cobrem os seguintes casos:
+- Sequência FS e caminho crítico.
+- PV/EV/AC/SPI/CPI/EAC com data de status e encerramento do cronograma.
+- Atividades paralelas e folga total.
+- Relações SS, FF e SF.
+- Relações múltiplas entre o mesmo par de atividades.
+- Lag negativo.
+- Rejeição de ciclos, predecessoras inexistentes e durações inválidas.
+- Smoke check da página IFC, navegação de Clima/IA, data de status financeiro e vínculos de renderização.
 
-## Cenários CPM cobertos
+## CI
 
-- FS, SS, FF e SF.
-- Lag positivo e negativo.
-- Múltiplas relações entre o mesmo par de atividades.
-- Prazo contratual impossível e folga negativa.
-- Ciclos.
-- Identificadores e tipos de relação inválidos.
-- Exemplo de controle A (3 dias) → B (4 dias), FS + 1: ES(B)=4 e EF(B)=8.
+O workflow `.github/workflows/validate-demo.yml` foi ampliado para:
+1. Extrair e verificar a sintaxe do JavaScript inline.
+2. Verificar a sintaxe de `schedule-enhancements.js`.
+3. Instalar dependências do frontend.
+4. Executar `npm run test:schedule`.
+5. Executar `npm run build`.
 
-## Observações
+**Status dos resultados:** aguardando execução do GitHub Actions para esta branch. Não considerar os testes aprovados até o workflow terminar em verde.
 
-A transpilação sintática de TypeScript não substitui o `tsc` completo nem o build Vite. A execução dos testes backend não comprova o funcionamento do frontend no navegador. A migração em banco limpo e em um esquema legado sintético foi validada. Antes de atualizar uma instalação real em uso, ainda é necessário testar com uma cópia do banco de dados dessa instalação.
+## Testes ainda pendentes
+
+- Importar e abrir IFC2x3, IFC4 e IFC4x3 reais no navegador.
+- Validar visualização 3D e simulação 4D em Chrome/Edge com WebGL.
+- Testar modelo de grande porte e medir consumo de memória.
+- Testar persistência IndexedDB após fechar/reabrir o navegador e alternar projetos.
+- Testar clima em rede real.
+- Testar Windows e instalação limpa do backend.
+- Validar cálculos CPM, PERT e financeiro com casos de obra independentes.
+
+## Observação
+
+Testes sintáticos e testes de funções não comprovam a compatibilidade geométrica com todos os arquivos IFC. O viewer continua experimental até a validação ponta a ponta.

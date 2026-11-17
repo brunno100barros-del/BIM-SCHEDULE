@@ -1,30 +1,57 @@
-# Plano de implementação até a versão 1.0.0
+# Plano de implementação — BIM SCHEDULE
 
-## Etapa concluída nesta compilação (parcial)
+## Entregue na linha 0.5.0-dev
 
-- Fundação CPM/PERT e testes principais.
-- Persistência SQLite com chaves estrangeiras.
-- Migração inicial Alembic.
-- CRUD de projetos, EAP e atividades.
-- Precedências FS/SS/FF/SF e cálculo CPM com prazo.
-- Gantt gráfico inicial.
-- Importação IFC assíncrona básica, estado e progresso por lotes.
-- Associação persistente Activity-GlobalId.
+1. Gestão local de projetos e backup JSON.
+2. CPM no navegador com FS/SS/FF/SF, lags, ciclos e caminho crítico.
+3. Calendário semanal e feriados.
+4. IFC local, inventário GlobalId, vínculo às atividades e CSV.
+5. Viewer 3D experimental e simulação 4D por GlobalId.
+6. Versionamento inicial por GlobalId.
+7. Indicadores EV/PV/AC/SPI/CPI/EAC.
+8. Recursos e conflitos básicos de alocação.
+9. PERT/Monte Carlo triangular.
+10. Consulta meteorológica, intercâmbio JSON com IA, snapshots e exportações.
 
 ## Próximas etapas obrigatórias
 
-1. **Estabilização do núcleo:** cobertura de testes do banco/API, migração de banco legado, auditoria de cascatas, calendários de trabalho, feriados e validação matemática independente.
-2. **Planejamento avançado:** edição de relações no Gantt, marcos, restrições de data, calendário, caminho crítico e folgas por calendário.
-3. **IFC:** validar IFC2x3 e IFC4 com modelos reais; extração de quantidades, pavimentos, propriedades e materiais; gestão de versões e comparação de GlobalIds.
-4. **BIM 4D:** sincronização de atividade/GlobalId/Gantt, estados temporais, player e comparação de cenários.
-5. **Recursos:** cadastro de equipes, equipamentos, materiais, produtividade e conflitos de alocação.
-6. **PERT e cenários:** estimativas otimista, provável e pessimista, cenários isolados e comparação de prazo.
-7. **Financeiro:** orçamento opcional, distribuição temporal, curva S e fluxo de caixa.
-8. **Clima:** importação de dados e distinção entre histórico, sazonalidade e previsão.
-9. **Central Gemini:** exportação/importação estruturada, validação e aprovação manual.
-10. **Auditoria e versionamento:** histórico de versões de cronograma, EAP, parâmetros e modelos IFC.
-11. **Exportação e release:** Excel/PDF, build, instalação limpa Windows, testes integrados e pacote 1.0.0.
+### A. Validar o fluxo BIM
+- Testar amostras IFC2x3, IFC4 e IFC4x3.
+- Verificar unidades, coordenadas, geometrias inválidas, modelos federados e arquivos grandes.
+- Validar a correspondência dos IDs entre o leitor Web-IFC e o viewer.
+- Testar renderização, seleção, isolamento, visibilidade e atualização 4D.
+- Substituir a biblioteca antiga web-ifc-three por That Open Components antes de produção.
 
-## Critério de release
+### B. Validar o planejamento
+- Criar bateria de casos CPM com todas as relações, lags, múltiplas predecessoras, restrições de data, ciclos e prazos inviáveis.
+- Validar resultados com cálculo independente.
+- Implementar calendários por atividade/recurso, exceções e restrições de data.
+- Incluir linha de base, comparação planejado x atual e atualização de status-date.
 
-A versão 1.0.0 somente será publicada quando o fluxo completo IFC → EAP → atividades → CPM → Gantt → associação IFC → simulação 4D → persistência/reabertura → exportação estiver validado, além dos módulos complementares definidos no escopo do produto.
+### C. Controle de custos e recursos
+- Distribuir orçamento por períodos e curva S.
+- Integrar medições e custo real.
+- Implementar produtividade, custo unitário, equipes/equipamentos e nivelamento.
+- Testar conflitos em períodos e calendários diferentes.
+
+### D. Riscos e clima
+- Permitir correlação entre durações e riscos.
+- Incluir sensibilidade e distribuição documentada.
+- Integrar histórico sazonal e parametrização de impacto climático por serviço.
+- Nunca interromper atividades automaticamente sem regra aprovada.
+
+### E. Plataforma corporativa
+- Hospedar FastAPI e banco persistente.
+- Criar autenticação, autorização, compartilhamento e trilha de auditoria.
+- Sincronizar projetos, IFC, versões, recursos e custos.
+- Implementar backups, monitoramento, CORS e gestão de segredos.
+
+### F. Entregáveis e release
+- Gerar XLSX nativo e PDF técnico paginado.
+- Testar build limpo, CI, Chrome/Edge, Windows e telas menores.
+- Validar o fluxo IFC → EAP → CPM → Gantt → associação → 4D → salvar/reabrir → exportar.
+- Só então avaliar versão 1.0.0.
+
+## Critério para versão 1.0.0
+
+Nenhum módulo deve ser classificado como concluído apenas por existir uma tela ou botão. A liberação exige testes automatizados, testes com arquivos/modelos reais e documentação das limitações residuais.
