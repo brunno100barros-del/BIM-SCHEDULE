@@ -40,6 +40,20 @@
   let weatherBusy = false;
   let lastPert = null;
 
+  function applyExt(source = {}) {
+    Object.keys(ext).forEach(key => delete ext[key]);
+    Object.assign(ext, defaults, source || {});
+    ext.calendar = { ...defaults.calendar, ...((source || {}).calendar || {}) };
+    ext.weather = { ...defaults.weather, ...((source || {}).weather || {}) };
+    ext.resources = Array.isArray(source?.resources) ? source.resources : [];
+    ext.assignments = Array.isArray(source?.assignments) ? source.assignments : [];
+    ext.actualCosts = source?.actualCosts && typeof source.actualCosts === "object" ? source.actualCosts : {};
+    ext.scenarios = Array.isArray(source?.scenarios) ? source.scenarios : [];
+    ext.versions = Array.isArray(source?.versions) ? source.versions : [];
+    ext.snapshots = Array.isArray(source?.snapshots) ? source.snapshots : [];
+    if (!Array.isArray(ext.calendar.weekdays) || !ext.calendar.weekdays.length) ext.calendar.weekdays = [...defaults.calendar.weekdays];
+    if (!Array.isArray(ext.calendar.holidays)) ext.calendar.holidays = [];
+  }
   function persistExt() { localStorage.setItem(EXT_KEY, JSON.stringify(ext)); }
   function currentProject() {
     return projectStore.find(p => p.id === ext.projectId) || null;
@@ -137,14 +151,25 @@
     }
   }
   function buildNetwork(activities) {
+    if (!Array.isArray(activities) || !activities.length) throw new Error("Cadastre ao menos uma atividade antes de calcular o cronograma.");
+    const ids = activities.map(a => Number(a.id));
+    if (ids.some(id => !Number.isFinite(id)) || new Set(ids).size !== ids.length) throw new Error("Há atividades com identificadores inválidos ou duplicados.");
+    activities.forEach(a => {
+      const duration = Number(a.duration);
+      if (!Number.isFinite(duration) || duration <= 0) throw new Error("A duração da atividade " + (a.code || a.id) + " deve ser maior que zero.");
+    });
     const byId = new Map(activities.map(a => [Number(a.id), a]));
     const edges = [];
     activities.forEach(successor => relationsFor(successor).forEach(r => {
-      const predecessor = byId.get(Number(r.predecessorId ?? r.id));
-      if (!predecessor) return;
+      const predecessorId = Number(r.predecessorId ?? r.id);
+      const predecessor = byId.get(predecessorId);
+      if (!predecessor) throw new Error("A atividade " + successor.code + " referencia uma predecessora inexistente (" + predecessorId + ").");
+      if (predecessor.id === successor.id) throw new Error("Uma atividade não pode ser predecessora dela mesma: " + successor.code + ".");
       const type = String(r.type || r.relation_type || "FS").toUpperCase();
       if (!["FS","SS","FF","SF"].includes(type)) throw new Error("Relação inválida em " + successor.code + ": " + type);
-      edges.push({ from: predecessor, to: successor, type, lag: Number(r.lag || 0) });
+      const lag = Number(r.lag || 0);
+      if (!Number.isFinite(lag)) throw new Error("Lag inválido na relação de " + successor.code + ".");
+      edges.push({ from: predecessor, to: successor, type, lag });
     }));
     const indegree = new Map(activities.map(a => [Number(a.id), 0]));
     edges.forEach(e => indegree.set(Number(e.to.id), indegree.get(Number(e.to.id)) + 1));
@@ -231,14 +256,14 @@
     if (!confirm("Abrir o projeto " + p.name + "? As alterações ainda não salvas do projeto atual serão substituídas.")) return;
     ext.projectId = p.id; ext.projectName = p.name; ext.projectCode = p.code;
     state.activities = JSON.parse(JSON.stringify(p.activities || [])); state.audit = JSON.parse(JSON.stringify(p.audit || []));
-    Object.keys(ext).forEach(k => { if (!(k in (p.ext || {}))) delete ext[k]; });
-    Object.assign(ext, p.ext || {}); ext.projectId = p.id; ext.projectName = p.name; ext.projectCode = p.code;
+    applyExt(p.ext || {}); ext.projectId = p.id; ext.projectName = p.name; ext.projectCode = p.code;
     try {
       const saved = await ifcDBGetById("project:" + p.id);
       if (saved && Array.isArray(saved.elements)) { ifcModel = saved; ifcElements = saved.elements; }
-      else if (p.ifc && Array.isArray(p.ifc.elements)) {
-        ifcElements = p.ifc.elements;
+      else if (p.ifc) {
+        ifcElements = Array.isArray(p.ifc.elements) ? p.ifc.elements : [];
         ifcModel = { id: "active", name: p.ifc.name, schema: p.ifc.schema, uploadedAt: p.ifc.uploadedAt, elements: ifcElements, mappings: p.ifc.mappings || {}, file: null };
+        notifyUser("Metadados IFC e vínculos importados. Reimporte o arquivo IFC original para carregar a geometria 3D.");
       } else { ifcModel = null; ifcElements = []; }
     } catch (error) { notifyUser("Projeto aberto, mas não foi possível recuperar o IFC: " + error.message); }
     persistExt(); baseSave(); refreshProjectSelect(); render();
@@ -280,6 +305,7 @@
       ifcDBDeleteById("project:" + deletedProjectId).catch(error => console.warn("Falha ao excluir o IFC do projeto:", error));
       ifcModel = null; ifcElements = [];
       notifyUser("Projeto removido da lista local. O projeto modelo será carregado.");
+      applyExt(defaults);
       ext.projectId = "ADM-001"; ext.projectName = "Edifício Administrativo BIMOFFICE"; ext.projectCode = "ADM-001";
       state.activities = seed.map(a => ({...a})); state.audit = seedAudit.slice(); persistExt(); save(); refreshProjectSelect(); render();
     }
