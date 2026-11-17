@@ -13,9 +13,19 @@ Atualizado em 2026-11-17.
 - [x] Linha do tempo com reprodução, seleção de atividades, exportação CSV e persistência local.
 - [x] Preservação do ambiente conectado anterior em Ambiente conectado.
 
+## Motor IFC no navegador — implementação inicial
+- [x] Importação IFC local com Web-IFC 0.0.78 / WebAssembly, sem envio do arquivo para backend.
+- [x] Indexação de entidades construtivas, nomes e GlobalIds.
+- [x] Sugestão heurística de disciplina e busca no inventário.
+- [x] Associação de GlobalIds reais às atividades e persistência local via IndexedDB.
+- [x] Exportação do inventário IFC e vínculos em CSV.
+- [ ] Visualizador geométrico IFC 3D no SCHEDULE.
+- [ ] Simulação BIM 4D real, destacando no modelo os elementos vinculados conforme o avanço do cronograma.
+- [ ] CPM completo conectado à interface pública e persistência compartilhada multiusuário.
+
 ## Limites da demonstração
 - Dados do projeto modelo não são gravados no banco do backend.
-- Modelo 3D esquemático, não IFC; GlobalIds fictícios.
+- O modelo 3D exibido ainda é esquemático. O motor IFC lê metadados e GlobalIds, mas ainda não renderiza geometria no SCHEDULE.
 - Simulação temporal não constitui BIM 4D real.
 - Curva S, indicadores financeiros, recursos e cenários são ilustrativos.
 - Recálculo demonstrativo simplificado, não substitui o motor CPM conectado FS/SS/FF/SF com lags.
