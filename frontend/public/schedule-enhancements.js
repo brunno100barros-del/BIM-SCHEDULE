@@ -15,7 +15,7 @@
     resources: [], assignments: [], actualCosts: {}, scenarios: [], versions: [],
     snapshots: [], weather: { latitude: "", longitude: "", rainLimit: 5, result: null },
     projectId: "ADM-001", projectName: "Edifício Administrativo BIMOFFICE", projectCode: "ADM-001",
-    deadline: 0
+    deadline: 0, statusDay: 0
   };
   const savedExt = loadJson(EXT_KEY, {});
   const ext = {
@@ -324,19 +324,31 @@
     if (e.target.id === "project-file" && e.target.files?.[0]) importProject(e.target.files[0]);
   });
 
+  function calculateEarnedValue(activities, actualCosts, statusDay) {
+    const result = { bac: 0, pv: 0, ev: 0, ac: 0, spi: 0, cpi: 0, eac: null };
+    const day = Math.max(0, Number(statusDay) || 0);
+    activities.forEach(a => {
+      const cost = Math.max(0, Number(a.cost) || 0);
+      const duration = Math.max(1, Number(a.duration) || 1);
+      const start = Math.max(0, Number(a.start) || 0);
+      const progress = Math.max(0, Math.min(100, Number(a.progress) || 0));
+      result.bac += cost;
+      result.ev += cost * progress / 100;
+      result.ac += Math.max(0, Number(actualCosts[a.id]) || 0);
+      const elapsed = Math.max(0, Math.min(duration, day - start));
+      result.pv += cost * elapsed / duration;
+    });
+    result.spi = result.pv > 0 ? result.ev / result.pv : 0;
+    result.cpi = result.ac > 0 ? result.ev / result.ac : 0;
+    result.eac = result.cpi > 0 ? result.bac / result.cpi : null;
+    return result;
+  }
   function financial() {
-    const total = state.activities.reduce((s,a)=>s+Number(a.cost||0),0);
-    const earned = state.activities.reduce((s,a)=>s+Number(a.cost||0)*Number(a.progress||0)/100,0);
-    const ac = state.activities.reduce((s,a)=>s+Number(ext.actualCosts[a.id] ?? 0),0);
-    const pv = state.activities.reduce((s,a)=> {
-      const duration = Math.max(1, Number(a.duration||1));
-      const elapsed = Math.max(0, Math.min(duration, max() - Number(a.start||0)));
-      return s + Number(a.cost||0) * elapsed / duration;
-    },0);
-    const spi = pv > 0 ? earned/pv : 0, cpi = ac > 0 ? earned/ac : 0;
+    const statusDay = Math.max(0, Math.min(max(), Number(ext.statusDay) || 0));
+    const { bac: total, ev: earned, ac, pv, spi, cpi, eac } = calculateEarnedValue(state.activities, ext.actualCosts, statusDay);
     const rows = state.activities.map(a => '<tr><td class="code">'+escHtml(a.code)+'</td><td>'+escHtml(a.name)+'</td><td><input type="number" min="0" step="0.01" data-base-cost="'+a.id+'" value="'+Number(a.cost||0)+'"></td><td>'+a.progress+'%</td><td><input type="number" min="0" step="0.01" data-actual-cost="'+a.id+'" value="'+Number(ext.actualCosts[a.id]||0)+'"></td><td>'+moneyBR(Number(a.cost||0)*Number(a.progress||0)/100)+'</td></tr>').join("");
     const ratios = [spi,cpi].map(x=>x.toFixed(2));
-    return '<div class="stack"><div class="kpis">'+kpi("ORÇAMENTO BASE",moneyBR(total),"soma do orçamento por atividade","＄")+kpi("VALOR AGREGADO · EV",moneyBR(earned),"custo orçado do trabalho executado","◉")+kpi("CUSTO REAL · AC",moneyBR(ac),"apropriação informada pelo usuário","▤")+kpi("SALDO DO ORÇAMENTO",moneyBR(total-earned),"BAC menos EV","◎")+'</div><div class="g2">'+panel("INDICADORES DE VALOR AGREGADO","CALCULADOS COM OS DADOS INFORMADOS",'<div class="row">PV · Valor planejado<b>'+moneyBR(pv)+'</b></div><div class="row">EV · Valor agregado<b>'+moneyBR(earned)+'</b></div><div class="row">AC · Custo real<b>'+moneyBR(ac)+'</b></div><div class="row">SPI · EV / PV<b>'+ratios[0]+'</b></div><div class="row">CPI · EV / AC<b>'+ratios[1]+'</b></div><div class="row">EAC · Estimativa ao término<b>'+moneyBR(cpi>0?total/cpi:0)+'</b></div>')+panel("CURVA S","ACUMULADO POR DIA DE TRABALHO",'<div class="chart"><svg viewBox="0 0 600 190">'+[35,75,115,155].map(y=>'<line x1="35" x2="580" y1="'+y+'" y2="'+y+'" stroke="var(--line)" stroke-dasharray="3 5"/>').join("")+curvePaths()+'</svg></div><div class="legend"><span>Planejado</span><span>Executado (EV)</span></div>')+'</div>'+panel("ORÇAMENTO E APROPRIAÇÃO POR ATIVIDADE","EDITE OS VALORES PARA ATUALIZAR OS INDICADORES",'<div class="tablewrap"><table class="tbl"><thead><tr><th>CÓDIGO</th><th>ATIVIDADE</th><th>ORÇAMENTO (R$)</th><th>AVANÇO</th><th>CUSTO REAL (R$)</th><th>EV</th></tr></thead><tbody>'+rows+'</tbody></table></div>')+'<div class="note">EV, PV e AC seguem a lógica de valor agregado. PV desta versão é uma aproximação linear por duração; para medição contratual, cadastre a linha de base e distribua o orçamento no tempo.</div></div>';
+    return '<div class="stack"><div class="toolbar"><div><b>Data de status</b><small>Dia útil de referência para calcular PV e indicadores</small></div><label>Dia <input type="number" min="0" max="'+max()+'" step="1" data-status-day value="'+statusDay+'"></label><strong>'+escHtml(date(statusDay))+'</strong></div><div class="kpis">'+kpi("ORÇAMENTO BASE",moneyBR(total),"soma do orçamento por atividade","＄")+kpi("VALOR AGREGADO · EV",moneyBR(earned),"custo orçado do trabalho executado","◉")+kpi("CUSTO REAL · AC",moneyBR(ac),"apropriação informada pelo usuário","▤")+kpi("SALDO DO ORÇAMENTO",moneyBR(total-earned),"BAC menos EV","◎")+'</div><div class="g2">'+panel("INDICADORES DE VALOR AGREGADO","CALCULADOS COM OS DADOS INFORMADOS",'<div class="row">PV · Valor planejado<b>'+moneyBR(pv)+'</b></div><div class="row">EV · Valor agregado<b>'+moneyBR(earned)+'</b></div><div class="row">AC · Custo real<b>'+moneyBR(ac)+'</b></div><div class="row">SPI · EV / PV<b>'+ratios[0]+'</b></div><div class="row">CPI · EV / AC<b>'+ratios[1]+'</b></div><div class="row">EAC · Estimativa ao término<b>'+eac===null?"—":moneyBR(eac)+'</b></div>')+panel("CURVA S","ACUMULADO POR DIA DE TRABALHO",'<div class="chart"><svg viewBox="0 0 600 190">'+[35,75,115,155].map(y=>'<line x1="35" x2="580" y1="'+y+'" y2="'+y+'" stroke="var(--line)" stroke-dasharray="3 5"/>').join("")+curvePaths()+'</svg></div><div class="legend"><span>Planejado</span><span>Executado (EV)</span></div>')+'</div>'+panel("ORÇAMENTO E APROPRIAÇÃO POR ATIVIDADE","EDITE OS VALORES PARA ATUALIZAR OS INDICADORES",'<div class="tablewrap"><table class="tbl"><thead><tr><th>CÓDIGO</th><th>ATIVIDADE</th><th>ORÇAMENTO (R$)</th><th>AVANÇO</th><th>CUSTO REAL (R$)</th><th>EV</th></tr></thead><tbody>'+rows+'</tbody></table></div>')+'<div class="note">EV, PV e AC seguem a lógica de valor agregado. PV desta versão é uma aproximação linear por duração; para medição contratual, cadastre a linha de base e distribua o orçamento no tempo.</div></div>';
   }
   function curvePaths() {
     const n = 12, points = [];
@@ -364,7 +376,7 @@
       }).reduce((s,x)=>s+Number(x.units||0),0);
       if(total>r.capacity) conflicts.push(r.name+" · "+a.code+" ("+total+"/"+r.capacity+")");
     }));
-    return '<div class="stack"><div class="toolbar"><div><b>Cadastro e nivelamento de recursos</b><small>Equipes, equipamentos ou frentes de serviço</small></div><span class="pill">'+ext.resources.length+' RECURSOS</span></div><div class="g2">'+panel("NOVO RECURSO","CAPACIDADE E CUSTO",'<form id="resource-form" class="form"><label class="wide">Nome<input name="name" required placeholder="Equipe de montagem metálica"></label><label>Disciplina<select name="discipline"><option>GER</option><option>CIV</option><option>EST</option><option>MET</option><option>SAN</option><option>ELE</option><option>ARQ</option></select></label><label>Capacidade<input name="capacity" type="number" min="0.1" step="0.1" value="1"></label><label>Custo/dia (R$)<input name="cost" type="number" min="0" step="0.01" value="0"></label><button class="btn primary">Cadastrar</button></form>')+panel("ALOCAR RECURSO","VINCULE A UMA ATIVIDADE",'<form id="assignment-form" class="form"><label class="wide">Recurso<select name="resourceId" required>'+resourceOptions+'</select></label><label class="wide">Atividade<select name="activityId" required>'+activityOptions+'</select></label><label>Unidades<input name="units" type="number" min="0.1" step="0.1" value="1"></label><button class="btn primary" '+(!ext.resources.length?'disabled':'')+'>Alocar</button></form>')+'</div>'+panel("RECURSOS CADASTRADOS",ext.resources.length+" ITENS",ext.resources.length?'<div class="tablewrap"><table class="tbl"><thead><tr><th>RECURSO</th><th>DISC.</th><th>CAPACIDADE</th><th>CUSTO/DIA</th><th></th></tr></thead><tbody>'+ext.resources.map(r=>'<tr><td>'+escHtml(r.name)+'</td><td>'+r.discipline+'</td><td>'+r.capacity+'</td><td>'+moneyBR(r.costPerDay)+'</td><td><button class="btn" data-remove-resource="'+r.id+'">Excluir</button></td></tr>').join("")+'</tbody></table></div>':'<div class="note">Nenhum recurso cadastrado. Cadastre equipes, equipamentos ou materiais para começar.</div>')+panel("ALOCAÇÕES",ext.assignments.length+" VÍNCULOS",assignments?'<div class="tablewrap"><table class="tbl"><thead><tr><th>RECURSO</th><th>ATIVIDADE</th><th>UNIDADES</th><th>PERÍODO</th><th></th></tr></thead><tbody>'+assignments+'</tbody></table></div>':'Sem alocações cadastradas.')+(conflicts.length?'<div class="note"><b>Conflito de capacidade:</b> '+conflicts.map(escHtml).join(" · ")+'</div>':'<div class="note">Nenhuma sobrealocação identificada nas atividades e recursos cadastrados.</div>')+'</div>';
+    return '<div class="stack"><div class="toolbar"><div><b>Cadastro e alocação de recursos</b><small>Equipes, equipamentos ou frentes de serviço</small></div><span class="pill">'+ext.resources.length+' RECURSOS</span></div><div class="g2">'+panel("NOVO RECURSO","CAPACIDADE E CUSTO",'<form id="resource-form" class="form"><label class="wide">Nome<input name="name" required placeholder="Equipe de montagem metálica"></label><label>Disciplina<select name="discipline"><option>GER</option><option>CIV</option><option>EST</option><option>MET</option><option>SAN</option><option>ELE</option><option>ARQ</option></select></label><label>Capacidade<input name="capacity" type="number" min="0.1" step="0.1" value="1"></label><label>Custo/dia (R$)<input name="cost" type="number" min="0" step="0.01" value="0"></label><button class="btn primary">Cadastrar</button></form>')+panel("ALOCAR RECURSO","VINCULE A UMA ATIVIDADE",'<form id="assignment-form" class="form"><label class="wide">Recurso<select name="resourceId" required>'+resourceOptions+'</select></label><label class="wide">Atividade<select name="activityId" required>'+activityOptions+'</select></label><label>Unidades<input name="units" type="number" min="0.1" step="0.1" value="1"></label><button class="btn primary" '+(!ext.resources.length?'disabled':'')+'>Alocar</button></form>')+'</div>'+panel("RECURSOS CADASTRADOS",ext.resources.length+" ITENS",ext.resources.length?'<div class="tablewrap"><table class="tbl"><thead><tr><th>RECURSO</th><th>DISC.</th><th>CAPACIDADE</th><th>CUSTO/DIA</th><th></th></tr></thead><tbody>'+ext.resources.map(r=>'<tr><td>'+escHtml(r.name)+'</td><td>'+r.discipline+'</td><td>'+r.capacity+'</td><td>'+moneyBR(r.costPerDay)+'</td><td><button class="btn" data-remove-resource="'+r.id+'">Excluir</button></td></tr>').join("")+'</tbody></table></div>':'<div class="note">Nenhum recurso cadastrado. Cadastre equipes, equipamentos ou materiais para começar.</div>')+panel("ALOCAÇÕES",ext.assignments.length+" VÍNCULOS",assignments?'<div class="tablewrap"><table class="tbl"><thead><tr><th>RECURSO</th><th>ATIVIDADE</th><th>UNIDADES</th><th>PERÍODO</th><th></th></tr></thead><tbody>'+assignments+'</tbody></table></div>':'Sem alocações cadastradas.')+(conflicts.length?'<div class="note"><b>Conflito de capacidade:</b> '+conflicts.map(escHtml).join(" · ")+'</div>':'<div class="note">Nenhuma sobrealocação identificada nas atividades e recursos cadastrados.</div>')+'</div>';
   }
   function triangular(min, mode, maxValue) {
     if (maxValue <= min) return min;
@@ -409,8 +421,11 @@
   }
   function weather() {
     const w=ext.weather;
-    const rows=w.result?.daily?.time?.map((d,i)=>'<tr><td>'+formatDate(d)+'</td><td>'+Number(w.result.daily.precipitation_sum?.[i]||0).toFixed(1)+' mm</td><td>'+Number(w.result.daily.precipitation_probability_max?.[i]||0)+'%</td><td>'+Number(w.result.daily.weather_code?.[i]||0)+'</td></tr>').join("")||"";
-    return '<div class="stack"><div class="toolbar"><div><b>Clima e impacto no planejamento</b><small>Consulta gratuita ao Open-Meteo, sem chave de API</small></div><span class="pill">PREVISÃO ATÉ 16 DIAS</span></div>'+panel("LOCAL DA OBRA","INFORME AS COORDENADAS DO CANTEIRO",'<form id="weather-form" class="form"><label>Latitude<input name="latitude" type="number" step="0.0001" required value="'+escHtml(w.latitude)+'" placeholder="-8.76"></label><label>Longitude<input name="longitude" type="number" step="0.0001" required value="'+escHtml(w.longitude)+'" placeholder="-63.90"></label><label>Limite de chuva (mm/dia)<input name="rainLimit" type="number" min="0" step="0.5" value="'+w.rainLimit+'"></label><button class="btn primary" '+(weatherBusy?'disabled':'')+'>Consultar previsão</button></form>')+panel("PREVISÃO DIÁRIA","DADOS METEOROLÓGICOS",weatherBusy?"Consultando…":rows?'<div class="tablewrap"><table class="tbl"><thead><tr><th>DATA</th><th>PRECIPITAÇÃO</th><th>PROB. CHUVA</th><th>CÓDIGO</th></tr></thead><tbody>'+rows+'</tbody></table></div>':"Informe as coordenadas e consulte a previsão.")+'<div class="note">A previsão meteorológica não determina automaticamente paralisação. Avalie tipo de serviço, proteção, segurança, condições reais do canteiro e critérios contratuais. A API gratuita tem horizonte limitado e depende de internet.</div></div>';
+    const rows=w.result?.daily?.time?.map((d,i)=>{
+      const rain=Number(w.result.daily.precipitation_sum?.[i]||0), alert=rain>Number(w.rainLimit||0);
+      return '<tr><td>'+formatDate(d)+'</td><td>'+rain.toFixed(1)+' mm</td><td>'+Number(w.result.daily.precipitation_probability_max?.[i]||0)+'%</td><td>'+Number(w.result.daily.weather_code?.[i]||0)+'</td><td>'+(alert?'<b class="warn">Atenção</b>':'—')+'</td></tr>';
+    }).join("")||"";
+    return '<div class="stack"><div class="toolbar"><div><b>Clima e impacto no planejamento</b><small>Consulta gratuita ao Open-Meteo, sem chave de API</small></div><span class="pill">PREVISÃO ATÉ 16 DIAS</span></div>'+panel("LOCAL DA OBRA","INFORME AS COORDENADAS DO CANTEIRO",'<form id="weather-form" class="form"><label>Latitude<input name="latitude" type="number" step="0.0001" required value="'+escHtml(w.latitude)+'" placeholder="-8.76"></label><label>Longitude<input name="longitude" type="number" step="0.0001" required value="'+escHtml(w.longitude)+'" placeholder="-63.90"></label><label>Limite de chuva (mm/dia)<input name="rainLimit" type="number" min="0" step="0.5" value="'+w.rainLimit+'"></label><button class="btn primary" '+(weatherBusy?'disabled':'')+'>Consultar previsão</button></form>')+panel("PREVISÃO DIÁRIA","DADOS METEOROLÓGICOS",weatherBusy?"Consultando…":rows?'<div class="tablewrap"><table class="tbl"><thead><tr><th>DATA</th><th>PRECIPITAÇÃO</th><th>PROB. CHUVA</th><th>CÓDIGO</th><th>LIMITE</th></tr></thead><tbody>'+rows+'</tbody></table></div>':"Informe as coordenadas e consulte a previsão.")+'<div class="note">A coluna de limite sinaliza dias cuja precipitação prevista supera o valor configurado. A previsão não determina automaticamente paralisação. Avalie tipo de serviço, proteção, segurança, condições reais do canteiro e critérios contratuais. A API gratuita tem horizonte limitado e depende de internet.</div></div>';
   }
   function exchange() {
     const payload={format:"bim-schedule-ai-context",version:1,project:projectPayload(),instructions:"Proponha alterações sem inventar dados. Retorne JSON com activities_updates [{id, optimistic, most_likely, pessimistic, risk_note}], risks [{title, probability, impact, mitigation}], assumptions []. Não altere GlobalIds."};
@@ -625,6 +640,7 @@
   });
   document.addEventListener("change", e => {
     const t=e.target;
+    if(t.dataset.statusDay !== undefined) { ext.statusDay=Math.max(0,Math.min(max(),Number(t.value)||0)); save(); render(); }
     if(t.dataset.baseCost) { const a=state.activities.find(x=>x.id===Number(t.dataset.baseCost)); if(a){a.cost=Math.max(0,Number(t.value)||0);save();render();} }
     if(t.dataset.actualCost) { ext.actualCosts[t.dataset.actualCost]=Math.max(0,Number(t.value)||0);save();render(); }
     if(t.dataset.pert) { const a=state.activities.find(x=>x.id===Number(t.dataset.pert)); if(a){a[t.dataset.kind==="optimistic"?"optimistic":t.dataset.kind==="likely"?"mostLikely":"pessimistic"]=Math.max(0,Number(t.value)||0);lastPert=null;save();} }
@@ -661,7 +677,16 @@
         const data=JSON.parse(text), preview=document.getElementById("ai-preview");
         if(data.format!=="bim-schedule-ai-context" && !Array.isArray(data.activities_updates))throw new Error("Formato de sugestões não reconhecido.");
         const updates=data.activities_updates||[];
-        const valid=updates.filter(x=>state.activities.some(a=>a.id===Number(x.id))&&["optimistic","most_likely","pessimistic"].some(k=>x[k]!==undefined));
+        const valid=updates.filter(x=>{
+          const a=state.activities.find(item=>item.id===Number(x.id));
+          if(!a)return false;
+          const keys=["optimistic","most_likely","pessimistic"].filter(k=>x[k]!==undefined);
+          if(!keys.length||keys.some(k=>!Number.isFinite(Number(x[k]))||Number(x[k])<0))return false;
+          const o=Number(x.optimistic??a.optimistic??a.duration*.85);
+          const m=Number(x.most_likely??a.mostLikely??a.duration);
+          const p=Number(x.pessimistic??a.pessimistic??a.duration*1.25);
+          return o<=m&&m<=p;
+        });
         window.__bimScheduleAiPending=valid;
         if(preview)preview.innerHTML='<div class="note">'+valid.length+' sugestão(ões) válidas encontradas. <button class="btn primary" data-approve-ai>Aprovar e aplicar</button></div>';
       }).catch(error=>notifyUser("JSON inválido: "+error.message));
