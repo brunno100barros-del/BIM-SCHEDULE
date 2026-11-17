@@ -1,41 +1,49 @@
-# Status de desenvolvimento — BIM SCHEDULE · interface demonstrativa
+# Status de desenvolvimento — BIM SCHEDULE 0.5.0-dev
 
 Atualizado em 2026-11-17.
 
-## Interface demonstrativa
-- [x] Interface de entrada inspirada no sistema Industrial Precision do COORDIX.
-- [x] Tipografia IBM Plex, paleta grafite/cobre e linhas técnicas.
-- [x] Símbolo vetorial COORDIX integrado como referência visual do ecossistema.
-- [x] Temas claro e escuro com preferência local.
-- [x] Projeto modelo carregado por padrão.
-- [x] Visão geral, EAP, Gantt, BIM 4D esquemático, custos, recursos, riscos e histórico.
-- [x] Edição local de avanço/duração, cadastro de atividade e recálculo simplificado FS.
-- [x] Linha do tempo com reprodução, seleção de atividades, exportação CSV e persistência local.
-- [x] Preservação do ambiente conectado anterior em Ambiente conectado.
+## Implementado na interface web (armazenamento local)
 
-## Motor IFC no navegador — implementação inicial
-- [x] Importação IFC local com Web-IFC 0.0.78 / WebAssembly, sem envio do arquivo para backend.
-- [x] Indexação de entidades construtivas, nomes e GlobalIds.
-- [x] Sugestão heurística de disciplina e busca no inventário.
-- [x] Associação de GlobalIds reais às atividades e persistência local via IndexedDB.
-- [x] Exportação do inventário IFC e vínculos em CSV.
-- [ ] Visualizador geométrico IFC 3D no SCHEDULE.
-- [ ] Simulação BIM 4D real, destacando no modelo os elementos vinculados conforme o avanço do cronograma.
-- [ ] CPM completo conectado à interface pública e persistência compartilhada multiusuário.
+- [x] Identidade visual Industrial Precision, tipografia IBM Plex e temas claro/escuro.
+- [x] Projeto modelo, EAP, Gantt, IFC, BIM 4D, custos, recursos, riscos e histórico.
+- [x] Gestão local de projetos: salvar, salvar como, abrir, excluir e importar/exportar JSON.
+- [x] Motor CPM no navegador com FS/SS/FF/SF, lags, detecção de ciclos, folgas e caminho crítico.
+- [x] Calendário de dias úteis configurável e feriados.
+- [x] Orçamento por atividade, custo real informado e indicadores EV/PV/AC/SPI/CPI/EAC.
+- [x] Cadastro de recursos, alocações e alerta de sobrecarga em períodos coincidentes.
+- [x] PERT triangular e Monte Carlo com percentis P50/P80/P90.
+- [x] Snapshots locais do cronograma e parâmetros.
+- [x] Intercâmbio estruturado de contexto/sugestões com IA, com aprovação manual.
+- [x] Consulta de previsão meteorológica via Open-Meteo (até 16 dias).
+- [x] Exportação SpreadsheetML compatível com Excel e impressão para PDF.
+- [x] Importação IFC local, indexação de GlobalIds, busca, vínculo às atividades e inventário CSV.
+- [x] Arquivamento local de GlobalIds de versões anteriores e comparação de inclusões/remoções.
 
-## Limites da demonstração
-- Dados do projeto modelo não são gravados no banco do backend.
-- O modelo 3D exibido ainda é esquemático. O motor IFC lê metadados e GlobalIds, mas ainda não renderiza geometria no SCHEDULE.
-- Simulação temporal não constitui BIM 4D real.
-- Curva S, indicadores financeiros, recursos e cenários são ilustrativos.
-- Recálculo demonstrativo simplificado, não substitui o motor CPM conectado FS/SS/FF/SF com lags.
-- Histórico local não é auditoria completa.
+## Implementação inicial — requer validação de campo
 
-## Ambiente conectado
-Permanecem disponíveis os módulos anteriores de projetos, EAP, atividades, CPM/Gantt inicial e importação IFC assíncrona, com limitações descritas em AUDIT.md, IMPLEMENTATION_PLAN.md e TEST_REPORT.md.
+- [~] Visualizador geométrico IFC 3D via Three.js/Web-IFC-Three carregado por CDN.
+- [~] Simulação BIM 4D com estados temporais dos elementos associados por GlobalId.
+- [~] Comparação de versões IFC limitada a GlobalIds; sem diff de geometria, propriedades e quantitativos.
+- [~] CPM no navegador com calendário semanal/feriados; ainda não contempla calendários independentes por recurso, restrições avançadas de data e exceções específicas.
+- [~] Financeiro: PV linear aproximado; não há linha de base distribuída no tempo nem integração com medições.
+- [~] Recursos: alocação e conflitos básicos; sem nivelamento automático, produtividade ou custos indiretos.
+- [~] PERT/Monte Carlo: distribuições triangulares independentes; sem correlação ou análise quantitativa completa de riscos.
+- [~] Clima: previsão de curto prazo; sem histórico sazonal integrado ao cálculo de prazo.
+- [~] Central IA: intercâmbio JSON; não há integração direta com Gemini/Claude/OpenAI.
+- [~] Auditoria: snapshots e histórico locais; não é trilha imutável de auditoria corporativa.
 
-## Validações pendentes
-- Instalação limpa e build npm em ambiente com acesso ao registry.
-- Teste responsivo em desktop, notebook e celular.
-- Teste manual do ambiente conectado com backend ativo.
-- Teste ponta a ponta de importação IFC real e persistência.
+## Backend e publicação
+
+- [x] Backend FastAPI com projetos, EAP, atividades, precedências, CPM e upload IFC assíncrono inicial.
+- [x] Banco SQLite local, estrutura Alembic e testes existentes do núcleo.
+- [ ] Backend hospedado e conectado à GitHub Page.
+- [ ] Autenticação, permissões, banco compartilhado e colaboração multiusuário.
+- [ ] Persistência central de recursos, custos, cenários, versões e auditoria.
+- [ ] Teste ponta a ponta de IFC2x3/IFC4/IFC4x3 e visualização 4D com modelos reais.
+- [ ] Build Vite/npm validado após as novas alterações.
+- [ ] Testes manuais em Chrome/Edge, telas menores e Windows.
+- [ ] Exportação XLSX nativa e PDF paginado com relatório técnico.
+
+## Aviso de uso
+
+A versão continua classificada como `0.5.0-dev`. Os módulos novos estão implementados em modo local e não devem ser tratados como sistema corporativo multiusuário ou ferramenta de medição contratual validada até a conclusão dos testes e da hospedagem do backend.
