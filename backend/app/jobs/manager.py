@@ -16,6 +16,18 @@ Decisões de projeto (Etapa 2):
 * **Recuperação**: tarefas ativas encontradas na inicialização pertenciam a um
   serviço anterior que terminou; são marcadas como ``interrupted``.
 
+Regras de consistência (revisão da Etapa 2, defeitos J1–J6):
+
+* **Ordem de encerramento** em todos os caminhos conduzidos pelo supervisor
+  (falha ao iniciar, falha de supervisão, morte do processo, encerramento
+  forçado, cancelamento na fila, desligamento e recuperação):
+  ``abort_hook`` → estado terminal com diagnóstico → liberação da referência ao
+  processo. Quando a tarefa aparece como terminal, os dados do domínio já foram
+  restaurados. Falha do próprio ``abort_hook`` fica explícita na tarefa e no log.
+* **Transições atômicas**: mudanças de estado são ``UPDATE ... WHERE status IN
+  (...)`` condicionais; apenas quem efetivamente muda o estado prossegue. Isso
+  elimina as corridas entre cancelamento, início e conclusão.
+
 Não há fila distribuída, Redis ou Celery: o serviço é local e de usuário único.
 """
 from __future__ import annotations
@@ -29,6 +41,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Optional
 
+from sqlalchemy import update
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import create_engine_for_url
@@ -95,7 +108,13 @@ class JobManager:
         logger.info("Gerenciador de tarefas iniciado com %s processo(s) simultâneo(s).", self.max_workers)
 
     def shutdown(self, timeout: Optional[float] = None) -> None:
-        """Encerra o gerenciador: pede o cancelamento das tarefas em execução e aguarda."""
+        """Encerra o gerenciador: pede o cancelamento das tarefas em execução e aguarda.
+
+        Tarefas ainda na fila são encerradas como ``interrupted`` **depois** da rotina de
+        consistência (J5). Processos que não terminam no prazo são encerrados à força e
+        finalizados da mesma forma; o que ainda restar ativo é recuperado na próxima
+        inicialização.
+        """
         if not self._started:
             self._engine.dispose()
             return
@@ -112,15 +131,17 @@ class JobManager:
             leftovers = list(self._processes.items())
         for job_id, process in leftovers:
             logger.warning("Encerrando à força o processo da tarefa %s no desligamento.", job_id)
-            process.kill()
-            process.join(5)
-        # Tarefas que nunca saíram da fila.
+            self._stop_process(process)
+        if leftovers:
+            # Com o processo encerrado, o supervisor conclui a finalização (_finalize).
+            for thread in self._threads:
+                thread.join(10)
         with self._sessions() as db:
-            for job in db.query(JobModel).filter(JobModel.status == "queued").all():
-                job.status = "interrupted"
-                job.message = "Interrompida: o serviço foi encerrado antes do início."
-                job.finished_at = utcnow()
-            db.commit()
+            queued = [(j.id, j.kind, json.loads(j.params_json or "{}"))
+                      for j in db.query(JobModel).filter(JobModel.status == "queued").all()]
+        for job_id, kind, params in queued:
+            self._close(job_id, kind, params, from_statuses=("queued",), status="interrupted",
+                        message="Interrompida: o serviço foi encerrado antes do início.")
         self._threads.clear()
         self._started = False
         self._engine.dispose()
@@ -157,21 +178,25 @@ class JobManager:
             return [job_to_dict(j) for j in query.order_by(JobModel.created_at.desc()).limit(limit).all()]
 
     def cancel(self, job_id: str) -> Optional[dict]:
+        """Cancela uma tarefa.
+
+        Na fila: a transição ``queued`` → ``cancelling`` é atômica (J4), então o supervisor
+        não pode iniciá-la depois; a rotina de consistência roda e só então a tarefa fica
+        ``cancelled`` (J2). Em execução: pede o cancelamento cooperativo.
+        """
         with self._sessions() as db:
             job = db.get(JobModel, job_id)
             if job is None:
                 return None
-            if job.status == "queued":
-                job.status = "cancelled"
-                job.cancel_requested = True
-                job.cancel_requested_at = utcnow()
-                job.finished_at = utcnow()
-                job.message = "Cancelada antes do início"
-                db.commit()
-                params = json.loads(job.params_json or "{}")
-                self._run_abort_hook(job.kind, job_id, params, "cancelled")
-                return job_to_dict(job)
-        self._request_cancel(job_id, reason="Cancelamento solicitado pelo usuário")
+            kind, params = job.kind, json.loads(job.params_json or "{}")
+        now = utcnow()
+        claimed = self._transition(job_id, ("queued",), status="cancelling", cancel_requested=True,
+                                   cancel_requested_at=now, message="Cancelando antes do início")
+        if claimed:
+            self._close(job_id, kind, params, from_statuses=("cancelling",), status="cancelled",
+                        message="Cancelada antes do início")
+        else:
+            self._request_cancel(job_id, reason="Cancelamento solicitado pelo usuário")
         return self.get(job_id)
 
     def active_count(self) -> int:
@@ -190,32 +215,58 @@ class JobManager:
             time.sleep(0.05)
         return self.get(job_id)
 
-    # ------------------------------------------------------------------ internos
+    # ------------------------------------------------------------------ transições
+    def _transition(self, job_id: str, from_statuses: tuple[str, ...], **values: Any) -> bool:
+        """Muda o estado somente se o atual estiver em ``from_statuses``. Retorna se mudou."""
+        values.setdefault("updated_at", utcnow())
+        with self._sessions() as db:
+            result = db.execute(
+                update(JobModel)
+                .where(JobModel.id == job_id, JobModel.status.in_(from_statuses))
+                .values(**values)
+                .execution_options(synchronize_session=False)
+            )
+            db.commit()
+            return result.rowcount == 1
+
+    def _close(self, job_id: str, kind: str, params: dict, *, from_statuses: tuple[str, ...], status: str,
+               message: str, error: Optional[str] = None) -> bool:
+        """Encerra a tarefa na ordem garantida: rotina de consistência → estado terminal.
+
+        Se a rotina falhar, a falha fica explícita em ``message`` e ``error`` (além do log).
+        Retorna se o estado terminal foi gravado (False se outra parte já o encerrou).
+        """
+        hook_error = self._run_abort_hook(kind, job_id, params, status)
+        if hook_error:
+            message = f"{message}; a rotina de consistência dos dados também falhou"
+            warning = (f"ATENÇÃO: a rotina de consistência dos dados falhou ({hook_error}); "
+                       "os registros relacionados podem ter ficado em estado intermediário. Consulte o log.")
+            error = f"{error} {warning}" if error else warning
+        closed = self._transition(job_id, from_statuses, status=status, message=message[:500],
+                                  error=error[:2000] if error else None, finished_at=utcnow())
+        if not closed:
+            logger.info("Tarefa %s já havia sido encerrada por outra parte; estado %s não aplicado.", job_id, status)
+        return closed
+
     def _request_cancel(self, job_id: str, *, reason: str) -> None:
+        """Pede cancelamento cooperativo; nunca altera uma tarefa já encerrada (J4)."""
         with self._sessions() as db:
             job = db.get(JobModel, job_id)
-            if job is None or job.status in TERMINAL_STATUSES:
-                return
-            if not job.cancel_requested:
-                job.cancel_requested = True
-                job.cancel_requested_at = utcnow()
-            job.status = "cancelling"
-            job.message = reason
-            db.commit()
+            requested_at = (job.cancel_requested_at if job and job.cancel_requested_at else utcnow())
+        self._transition(job_id, ("running", "cancelling"), status="cancelling", cancel_requested=True,
+                         cancel_requested_at=requested_at, message=reason)
 
     def _recover_stale_jobs(self) -> None:
+        """Tarefas ativas de um serviço anterior: rotina de consistência → ``interrupted`` (J6)."""
         with self._sessions() as db:
-            stale = db.query(JobModel).filter(JobModel.status.in_(ACTIVE_STATUSES)).all()
-            items = [(j.id, j.kind, json.loads(j.params_json or "{}")) for j in stale]
-            for job in stale:
-                job.status = "interrupted"
-                job.message = "Interrompida: o serviço anterior foi encerrado antes da conclusão."
-                job.finished_at = utcnow()
-            db.commit()
-        for job_id, kind, params in items:
-            logger.warning("Tarefa %s (%s) marcada como interrompida na inicialização.", job_id, kind)
-            self._run_abort_hook(kind, job_id, params, "interrupted")
+            stale = [(j.id, j.kind, json.loads(j.params_json or "{}"))
+                     for j in db.query(JobModel).filter(JobModel.status.in_(ACTIVE_STATUSES)).all()]
+        for job_id, kind, params in stale:
+            logger.warning("Tarefa %s (%s) interrompida por encerramento anterior do serviço.", job_id, kind)
+            self._close(job_id, kind, params, from_statuses=ACTIVE_STATUSES, status="interrupted",
+                        message="Interrompida: o serviço anterior foi encerrado antes da conclusão.")
 
+    # ------------------------------------------------------------------ supervisão
     def _supervise(self) -> None:
         while not self._stopping.is_set():
             try:
@@ -230,15 +281,12 @@ class JobManager:
                 self._queue.task_done()
 
     def _run(self, job_id: str) -> None:
+        # J4: só inicia quem efetivamente muda queued → running.
+        if not self._transition(job_id, ("queued",), status="running", started_at=utcnow(), message="Em execução"):
+            return
         with self._sessions() as db:
             job = db.get(JobModel, job_id)
-            if job is None or job.status != "queued":
-                return
             kind, params = job.kind, json.loads(job.params_json or "{}")
-            job.status = "running"
-            job.started_at = utcnow()
-            job.message = "Em execução"
-            db.commit()
 
         try:
             process = self._mp.Process(
@@ -252,10 +300,8 @@ class JobManager:
                 self._processes[job_id] = process
             process.start()
         except Exception as exc:
-            # Sem processo não há quem finalize a tarefa: registra a falha aqui para que
-            # ela não fique "running" indefinidamente. O supervisor segue para a próxima.
-            # A referência só é liberada depois da finalização, para que wait() e os
-            # clientes não vejam a tarefa encerrada antes de os dados ficarem consistentes.
+            # Sem processo não há quem finalize a tarefa: registra a falha aqui. A referência
+            # só é liberada depois da finalização.
             logger.exception("Falha ao iniciar o processo da tarefa %s (%s)", job_id, kind)
             try:
                 self._fail_to_start(job_id, kind, params, exc)
@@ -263,6 +309,9 @@ class JobManager:
                 with self._lock:
                     self._processes.pop(job_id, None)
             return
+
+        forced = False
+        supervision_error: Optional[BaseException] = None
         try:
             with self._sessions() as db:
                 job = db.get(JobModel, job_id)
@@ -270,10 +319,16 @@ class JobManager:
                     job.pid = process.pid
                     db.commit()
             forced = self._monitor(job_id, process)
+        except Exception as exc:
+            # J3: sem supervisão o processo ficaria órfão; encerra-o e finaliza a tarefa.
+            supervision_error = exc
+            logger.exception("Falha na supervisão da tarefa %s; encerrando o processo.", job_id)
+            self._stop_process(process)
+        try:
+            self._finalize(job_id, kind, params, process.exitcode, forced, supervision_error)
         finally:
             with self._lock:
                 self._processes.pop(job_id, None)
-        self._finalize(job_id, kind, params, process.exitcode, forced)
 
     def _monitor(self, job_id: str, process) -> bool:
         cancel_seen: Optional[float] = None
@@ -288,62 +343,56 @@ class JobManager:
                         cancel_seen = time.monotonic()
             elif time.monotonic() - cancel_seen > self.cancel_grace:
                 logger.warning("Tarefa %s não respondeu ao cancelamento em %.1fs; encerrando o processo.", job_id, self.cancel_grace)
-                process.terminate()
-                process.join(5)
-                if process.is_alive():
-                    process.kill()
-                    process.join(5)
+                self._stop_process(process)
                 return True
         return False
+
+    @staticmethod
+    def _stop_process(process) -> None:
+        if process.is_alive():
+            process.terminate()
+            process.join(5)
+        if process.is_alive():
+            process.kill()
+            process.join(5)
 
     def _fail_to_start(self, job_id: str, kind: str, params: dict, exc: BaseException) -> None:
         """Registra como ``failed`` uma tarefa cujo processo não pôde ser iniciado.
 
-        Ordem garantida:
-        1. executa a rotina de consistência do domínio (``abort_hook``) e aguarda o término;
-        2. só então grava o estado terminal ``failed`` com mensagem e erro.
-        Assim, quando a tarefa pode ser consultada como ``failed``, os dados do domínio
-        (por exemplo, o modelo IFC) já foram restaurados. Se a própria rotina falhar, a
-        falha fica explícita no log e no diagnóstico da tarefa.
+        Ordem garantida: rotina de consistência (``abort_hook``) → estado ``failed`` com
+        mensagem e erro. Se a própria rotina falhar, a falha fica explícita no log e no
+        diagnóstico da tarefa.
         """
         detail = str(exc).strip() or exc.__class__.__name__
-        hook_error = self._run_abort_hook(kind, job_id, params, "failed")
         error = (f"Não foi possível iniciar o processo da tarefa ({exc.__class__.__name__}: {detail}). "
                  "Verifique memória disponível, antivírus e permissões, e tente novamente.")
-        message = "Falhou ao iniciar"
-        if hook_error:
-            message = "Falhou ao iniciar; a rotina de consistência dos dados também falhou"
-            error += (f" ATENÇÃO: a rotina de consistência dos dados falhou ({hook_error}); "
-                      "os registros relacionados podem ter ficado em estado intermediário. Consulte o log.")
-        with self._sessions() as db:
-            job = db.get(JobModel, job_id)
-            if job is None:
-                return
-            job.status = "failed"
-            job.message = message[:500]
-            job.error = error[:2000]
-            job.pid = None
-            job.finished_at = utcnow()
-            db.commit()
+        self._close(job_id, kind, params, from_statuses=("running", "cancelling"), status="failed",
+                    message="Falhou ao iniciar", error=error)
 
-    def _finalize(self, job_id: str, kind: str, params: dict, exitcode: Optional[int], forced: bool) -> None:
+    def _finalize(self, job_id: str, kind: str, params: dict, exitcode: Optional[int], forced: bool,
+                  supervision_error: Optional[BaseException] = None) -> None:
+        """Finaliza uma tarefa cujo processo terminou sem gravar o próprio estado (J1, J3)."""
         with self._sessions() as db:
             job = db.get(JobModel, job_id)
             if job is None or job.status in TERMINAL_STATUSES:
-                return
-            if forced or job.cancel_requested:
-                job.status = "cancelled"
-                job.message = (f"Cancelada: o processo foi encerrado após {self.cancel_grace:.0f}s sem resposta"
-                               if forced else "Cancelada")
-            else:
-                job.status = "failed"
-                job.message = "Falhou"
-                job.error = f"O processo da tarefa terminou inesperadamente (código de saída {exitcode})."
-            job.finished_at = utcnow()
-            status = job.status
-            db.commit()
+                return  # o processo da tarefa já finalizou o próprio estado
+            cancel_requested = bool(job.cancel_requested)
+        error: Optional[str] = None
+        if supervision_error is not None:
+            status, message = "failed", "Falhou"
+            detail = str(supervision_error).strip() or supervision_error.__class__.__name__
+            error = (f"Falha na supervisão do processo da tarefa ({supervision_error.__class__.__name__}: "
+                     f"{detail}); o processo foi encerrado.")
+        elif forced or cancel_requested:
+            status = "cancelled"
+            message = (f"Cancelada: o processo foi encerrado após {self.cancel_grace:.0f}s sem resposta"
+                       if forced else "Cancelada")
+        else:
+            status, message = "failed", "Falhou"
+            error = f"O processo da tarefa terminou inesperadamente (código de saída {exitcode})."
         logger.warning("Tarefa %s finalizada pelo supervisor com status %s (exitcode=%s).", job_id, status, exitcode)
-        self._run_abort_hook(kind, job_id, params, status)
+        self._close(job_id, kind, params, from_statuses=("running", "cancelling"), status=status,
+                    message=message, error=error)
 
     def _run_abort_hook(self, kind: str, job_id: str, params: dict, status: str) -> Optional[str]:
         """Executa a rotina de consistência do tipo de tarefa.

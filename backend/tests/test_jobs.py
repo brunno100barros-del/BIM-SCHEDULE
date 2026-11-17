@@ -179,38 +179,65 @@ def _upload_ifc(client, project_id, path):
     return response.json()
 
 
-def test_process_start_failure_runs_abort_hook_for_ifc(client, runtime, monkeypatch, tmp_path):
-    """No exato momento em que a tarefa passa a 'failed', o modelo IFC já está 'failed' e sem elementos.
-
-    Sem atrasos nem consultas repetidas: um listener do SQLAlchemy observa a própria gravação do
-    status terminal da tarefa e, na mesma conexão, lê o estado do modelo IFC naquele instante.
+def install_terminal_audit(database_url: str) -> None:
+    """Gatilho SQLite: no instante em que uma tarefa recebe estado terminal, registra o estado
+    do modelo IFC associado e o resultado da rotina de consistência. Prova a ordem das
+    operações no próprio banco, sem atrasos nem consultas repetidas.
     """
-    from sqlalchemy import event, text
+    import sqlite3
 
+    from app.core.storage import sqlite_path_from_url
+
+    conn = sqlite3.connect(str(sqlite_path_from_url(database_url)))
+    try:
+        conn.executescript("""
+            CREATE TABLE IF NOT EXISTS job_terminal_audit (
+                job_id TEXT, status TEXT, result_json TEXT, model_status TEXT, model_elements INTEGER);
+            CREATE TRIGGER IF NOT EXISTS trg_job_terminal_audit
+            AFTER UPDATE OF status ON jobs
+            WHEN NEW.status IN ('completed', 'failed', 'cancelled', 'interrupted')
+                 AND OLD.status NOT IN ('completed', 'failed', 'cancelled', 'interrupted')
+            BEGIN
+                INSERT INTO job_terminal_audit VALUES (
+                    NEW.id, NEW.status, NEW.result_json,
+                    (SELECT status FROM ifc_models WHERE id = json_extract(NEW.params_json, '$.model_id')),
+                    (SELECT COUNT(*) FROM ifc_elements WHERE model_id = json_extract(NEW.params_json, '$.model_id')));
+            END;
+        """)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def terminal_audit(database_url: str, job_id: str) -> list[dict]:
+    import sqlite3
+
+    from app.core.storage import sqlite_path_from_url
+
+    conn = sqlite3.connect(str(sqlite_path_from_url(database_url)))
+    try:
+        rows = conn.execute("SELECT status, result_json, model_status, model_elements FROM job_terminal_audit "
+                            "WHERE job_id = ?", (job_id,)).fetchall()
+    finally:
+        conn.close()
+    return [{"status": r[0], "result": json.loads(r[1]) if r[1] else None, "model_status": r[2],
+             "model_elements": r[3]} for r in rows]
+
+
+def test_process_start_failure_runs_abort_hook_for_ifc(client, runtime, monkeypatch, tmp_path):
+    """No exato momento em que a tarefa passa a 'failed', o modelo IFC já está 'failed' e sem elementos."""
     from ifc_factory import build_ifc
 
-    snapshots = []
-
-    def on_job_update(_mapper, connection, target):
-        if target.status != "failed":
-            return
-        model_id = json.loads(target.params_json or "{}").get("model_id")
-        status = connection.execute(text("SELECT status FROM ifc_models WHERE id = :id"), {"id": model_id}).scalar()
-        elements = connection.execute(text("SELECT COUNT(*) FROM ifc_elements WHERE model_id = :id"), {"id": model_id}).scalar()
-        snapshots.append({"job_id": target.id, "model_status": status, "elements": elements})
-
+    install_terminal_audit(runtime.storage.database_url)
     monkeypatch.setattr(runtime.jobs, "_mp", FailingStartContext(runtime.jobs._mp, failures=1))
-    event.listen(JobModel, "after_update", on_job_update)
-    try:
-        project_id = client.post("/api/v1/projects/", json={"name": "Falha", "code": "START-FAIL"}).json()["id"]
-        ifc = build_ifc(tmp_path / "modelo.ifc", walls=3)
-        body = _upload_ifc(client, project_id, ifc)
-        final = runtime.jobs.wait(body["job_id"], timeout=15)
-    finally:
-        event.remove(JobModel, "after_update", on_job_update)
+    project_id = client.post("/api/v1/projects/", json={"name": "Falha", "code": "START-FAIL"}).json()["id"]
+    ifc = build_ifc(tmp_path / "modelo.ifc", walls=3)
+    body = _upload_ifc(client, project_id, ifc)
+    final = runtime.jobs.wait(body["job_id"], timeout=15)
 
     assert final["status"] == "failed"
-    assert snapshots == [{"job_id": body["job_id"], "model_status": "failed", "elements": 0}]
+    audit = terminal_audit(runtime.storage.database_url, body["job_id"])
+    assert [(a["status"], a["model_status"], a["model_elements"]) for a in audit] == [("failed", "failed", 0)]
     model = client.get(f"/api/v1/ifc/model/{body['id']}").json()
     assert model["status"] == "failed"
     assert body["job_id"] in model["error_message"]

@@ -135,9 +135,9 @@ Todos os testes abaixo foram **executados**. Os resultados são os observados.
 
 | Conjunto | Ambiente | Resultado |
 |---|---|---|
-| Backend (pytest) | Linux, Python 3.13 (local) | **68 aprovados** (após a revisão; eram 62) |
-| Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12.16 | **68 aprovados** (execução 44175636745, commit `27becbf`) |
-| Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | **68 aprovados** (execução 44175636745, commit `27becbf`; valida `spawn`, caminhos e reinício do serviço no Windows) |
+| Backend (pytest) | Linux, Python 3.13 (local) | **79 aprovados** (após a Fase 0; eram 62 na entrega e 68 após a revisão) |
+| Backend (pytest) | GitHub Actions `ubuntu-latest`, Python 3.12.16 | Aguardando o CI da Fase 0 (antes: 68/68 em `27becbf`) |
+| Backend (pytest) | GitHub Actions `windows-latest`, Python 3.12.10 | Aguardando o CI da Fase 0 (antes: 68/68 em `27becbf`) |
 | Frontend unitários (Vitest) | local e CI | **12 aprovados** |
 | Motor da demonstração (node:test) | local e CI | **9 aprovados** |
 | Ponta a ponta (Playwright, Chromium) | local e CI | **8 aprovados** (CI: execução 44175636745) |
@@ -148,8 +148,9 @@ Histórico do CI durante a revisão do PR #5:
 - `1b7138d` falhou (Ubuntu): ordem `failed` → `abort_hook`. Corrigido.
 - `f64018c` falhou (Windows): bloqueio do SQLite no parser IFC. Corrigido.
 - `27becbf` passou nos três jobs: backend Ubuntu e Windows, e frontend com unitários, build e e2e. Execuções 44175636745 (pull_request) e 44175624093 (push).
+- Fase 0 (J1–J6): aguardando o CI.
 
-Composição dos 68 testes do backend: 20 anteriores (CPM, API, banco) e 48 novos (42 da entrega inicial e 6 da revisão do PR #5).
+Composição dos 79 testes do backend: 20 anteriores (CPM, API, banco) e 59 novos (42 da entrega inicial, 6 da revisão do PR #5 e 11 da Fase 0).
 - **Tarefas:** progresso; API responsiva durante a tarefa; cancelamento cooperativo; encerramento forçado de tarefa que não responde; falha; morte do processo; cancelamento na fila; desligamento do serviço; recuperação de tarefas interrompidas.
 - **IFC real:** processamento completo, cancelamento sem dados parciais, arquivo corrompido, validações, limite de tamanho, confinamento do arquivo em `uploads/`.
 - **Preservação de dados:** leitura no modo legado; migração validada com hashes intactos e reinício sem nova migração; falha de migração mantendo o local legado; cópia divergente rejeitada; URL explícita; atualização de esquema com backup.
@@ -204,6 +205,31 @@ Composição dos 68 testes do backend: 20 anteriores (CPM, API, banco) e 48 novo
 - **Teste novo** (`backend/tests/test_errors_security.py::test_cors_accepts_desktop_protocol_origin_only_when_configured`): com a configuração do app Windows, o *preflight* com `X-BIM-Schedule-Token` e o GET a partir de `app://bim-schedule` são aceitos. As origens `null`, `app://outro-app` e `http://127.0.0.1:3000` são recusadas. Na configuração padrão, nem `app://` nem `null` são aceitas.
 - **Código do backend:** sem alteração, porque o CORS já compara origens exatas e aceita a lista por variável de ambiente. Só comentários do frontend que citavam `file://` ou preload foram atualizados: `vite.config.ts`, `IfcViewer.tsx`, `config/runtime.ts`, `public/runtime-config.js`.
 - **Pendente** (etapa de distribuição): implementar e testar o handler do protocolo e a casca Electron com o app empacotado.
+
+### C.4.1 Fase 0 — correções J1–J6 das tarefas (pré-requisito da Etapa 3)
+
+A revisão completa de `backend/app/jobs/manager.py` encontrou o mesmo defeito de ordem em outros caminhos e corridas de estado. A regra passou a valer para **todos** os caminhos de encerramento conduzidos pelo supervisor: rotina de consistência (`abort_hook`) → estado terminal com diagnóstico → liberação da referência ao processo. Todas as mudanças de estado agora são `UPDATE ... WHERE status IN (...)` condicionais (`_transition`), e só prossegue quem efetivamente mudou o estado.
+
+| # | Defeito | Correção |
+|---|---|---|
+| J1 | `_finalize()` (morte do processo ou encerramento forçado) gravava o estado terminal antes da rotina de consistência, e a referência ao processo já estava liberada | `_close()`: rotina → estado terminal; a referência só é liberada depois |
+| J2 | Cancelamento na fila gravava `cancelled` antes da rotina | Transição atômica `queued` → `cancelling`, depois rotina, depois `cancelled` |
+| J3 | Exceção depois do `start()` (gravar o PID ou `_monitor`) deixava a tarefa `running` e o processo sem supervisão | O processo é encerrado (`_stop_process`) e a tarefa é finalizada como `failed`, com "Falha na supervisão do processo da tarefa (...)" |
+| J4 | Cancelamento e início liam `queued` e gravavam sem condição (atualização perdida); `_request_cancel` podia sobrescrever uma tarefa recém-concluída | Início e cancelamento por transição condicional; o pedido de cancelamento só altera tarefas `running`/`cancelling` |
+| J5 | O desligamento marcava a fila como `interrupted` sem rotina de consistência (o modelo IFC ficava `queued` para sempre); processos encerrados à força não eram finalizados | Rotina → `interrupted` para cada tarefa na fila; após o encerramento forçado, aguarda o supervisor finalizar |
+| J6 | A recuperação na inicialização gravava `interrupted` antes da rotina; falha da rotina ia só para o log | Rotina → `interrupted`, com falha da rotina explícita na tarefa (`message` e `error`, visíveis na API) |
+
+Em todos os caminhos, uma falha da rotina de consistência fica registrada no log com traceback e na própria tarefa: a mensagem termina com "a rotina de consistência dos dados também falhou" e o erro inclui "ATENÇÃO" e a exceção.
+
+**Testes** (`backend/tests/test_jobs_consistency.py`, 11 novos):
+- A ordem é provada por um **gatilho SQLite** (`install_terminal_audit`): no instante em que a tarefa recebe o estado terminal, o próprio banco registra o estado do modelo IFC e a marca gravada pela rotina de consistência. Não há `sleep`, atraso artificial nem consulta repetida.
+- O teste `test_process_start_failure_runs_abort_hook_for_ifc` passou a usar o mesmo gatilho, já que as transições agora são `UPDATE` condicionais e não disparam *listeners* do ORM.
+- A tarefa de diagnóstico, usada só em testes, ganhou uma rotina de consistência ativada por parâmetro (`abort_marker`, `abort_hook_fails`).
+- **Contraprova:** com o `manager.py` anterior (`ee058ea`), 9 dos 11 testes falham. Os 2 que passam são casos sequenciais de regressão de J4; a corrida em si é exercida pelo teste concorrente, que falha com o código anterior.
+
+**Frente concorrente:** a branch `claude/nifty-feynman-g1rwmh`, de outra sessão, corrige os erros da demonstração a partir da `main`, sem PR. Ela adiciona `frontend/package-lock.json`, `@playwright/test@1.63.0` e um `playwright.config.mjs` próprio. A Fase 0 não altera nenhum desses arquivos nem a outra branch. Ao integrar aquela correção depois do merge da Etapa 2, será preciso conciliar o `package-lock.json`, o script `test:e2e` e as duas configurações do Playwright.
+
+**Fica para a Etapa 3 (planejado):** estado explícito de "recuperação pendente" para nova tentativa da rotina de consistência. Na Fase 0, a falha da rotina fica diagnosticada, mas a tarefa é encerrada.
 
 ### C.5 Problemas encontrados e **não** corrigidos (fora do escopo; não introduzidos nesta etapa)
 

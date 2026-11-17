@@ -33,6 +33,7 @@ JOB_KINDS: dict[str, JobKind] = {
     "system.diagnostic": JobKind(
         name="system.diagnostic",
         target="app.jobs.diagnostic:diagnostic_job",
+        abort_hook="app.jobs.diagnostic:on_diagnostic_aborted",
         description="Tarefa de diagnóstico usada nos testes do mecanismo de tarefas.",
     ),
 }
