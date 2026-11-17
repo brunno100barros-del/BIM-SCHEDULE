@@ -20,13 +20,3 @@ export interface ProjectCreateInput {
   end_date?: string;
   status?: string;
 }
-
-export interface ProjectUpdateInput {
-  name?: string;
-  code?: string;
-  client?: string;
-  description?: string;
-  start_date?: string;
-  end_date?: string;
-  status?: string;
-}

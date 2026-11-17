@@ -7,7 +7,7 @@ interface NavbarProps {
   activeProjectName?: string;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ darkMode, onToggleDarkMode, activeProjectName }) => {
+export const Navbar: React.FC<NavbarProps> = ({ darkMode, onToggleDarkMode }) => {
   return (
     <header className="h-16 bg-slate-900 border-b border-slate-800 px-6 flex items-center justify-between sticky top-0 z-20">
       <div className="flex items-center space-x-4">

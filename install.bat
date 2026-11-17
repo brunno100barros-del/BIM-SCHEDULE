@@ -1,51 +1,67 @@
 @echo off
-CLS
-COLOR 0B
+setlocal EnableExtensions
+cls
+color 0B
+set "ROOT=%~dp0"
 echo ====================================================
-echo    BIM SCHEDULE — Instalador de Dependencias (Fase 2)
+echo       BIM SCHEDULE - Instalacao do ambiente
 echo ====================================================
 echo.
 
-echo [1/4] Verificando ambiente Python...
-python --version >nul 2>&1
+where python >nul 2>&1
 if errorlevel 1 (
-    echo [ERRO] Python nao foi encontrado no PATH. Instale o Python 3.10+ antes de continuar.
-    pause
-    exit /b 1
+  echo [ERRO] Python nao encontrado no PATH. Instale Python 3.11 ou 3.12.
+  pause
+  exit /b 1
+)
+where node >nul 2>&1
+if errorlevel 1 (
+  echo [ERRO] Node.js nao encontrado no PATH. Instale uma versao LTS.
+  pause
+  exit /b 1
 )
 
-echo [2/4] Instalando dependencias do Backend (FastAPI + IfcOpenShell)...
-cd backend
-python -m pip install --upgrade pip
-pip install -r requirements.txt
-if errorlevel 1 (
-    echo [ERRO] Falha ao instalar dependencias do backend.
-    pause
-    exit /b 1
-)
-cd ..
+python -c "import sys; print('Python', sys.version.split()[0])"
+node --version
+npm --version
 
-echo [3/4] Verificando ambiente Node.js...
-node --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERRO] Node.js nao foi encontrado no PATH. Instale o Node.js 18+ antes de continuar.
-    pause
-    exit /b 1
+echo.
+echo [1/5] Criando ambiente virtual Python...
+if not exist "%ROOT%.venv\Scripts\python.exe" (
+  python -m venv "%ROOT%.venv"
+  if errorlevel 1 goto :fail
 )
 
-echo [4/4] Instalando dependencias do Frontend (React + Three.js + Web-IFC)...
-cd frontend
-call npm install --legacy-peer-deps
-if errorlevel 1 (
-    echo [ERRO] Falha ao instalar dependencias do frontend.
-    pause
-    exit /b 1
-)
-cd ..
+echo [2/5] Instalando dependencias do backend...
+"%ROOT%.venv\Scripts\python.exe" -m pip install --upgrade pip
+if errorlevel 1 goto :fail
+"%ROOT%.venv\Scripts\python.exe" -m pip install -r "%ROOT%backend\requirements.txt"
+if errorlevel 1 goto :fail
+
+echo [3/5] Executando migracoes do banco de dados...
+cd /d "%ROOT%backend"
+set "PYTHONPATH=%ROOT%backend"
+"%ROOT%.venv\Scripts\python.exe" -m alembic upgrade head
+if errorlevel 1 goto :fail
+
+echo [4/5] Instalando dependencias do frontend...
+cd /d "%ROOT%frontend"
+call npm install
+if errorlevel 1 goto :fail
+
+echo [5/5] Validando build do frontend...
+call npm run build
+if errorlevel 1 goto :fail
 
 echo.
 echo ====================================================
-echo    INSTALACAO CONCLUIDA COM SUCESSO!
+echo Instalacao concluida. Execute start.bat para abrir.
 echo ====================================================
-echo Execute o arquivo start.bat para iniciar a aplicacao.
 pause
+exit /b 0
+
+:fail
+echo.
+echo [ERRO] A instalacao ou validacao falhou. Leia a mensagem acima.
+pause
+exit /b 1

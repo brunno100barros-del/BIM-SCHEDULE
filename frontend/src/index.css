@@ -14,22 +14,6 @@
   }
 }
 
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
-}
-::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.4);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.7);
-}
-
-/* HOTFIX: Overrides para Modo Claro nas classes hardcoded */
 body:not(.dark) .bg-slate-900 { background-color: #ffffff; border-color: #e2e8f0; }
 body:not(.dark) .bg-slate-950 { background-color: #f8fafc; }
 body:not(.dark) .bg-slate-800 { background-color: #f1f5f9; border-color: #e2e8f0; }

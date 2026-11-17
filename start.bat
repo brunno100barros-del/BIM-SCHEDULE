@@ -1,24 +1,28 @@
 @echo off
-CLS
-COLOR 0A
+setlocal EnableExtensions
+cls
+color 0A
+set "ROOT=%~dp0"
+if not exist "%ROOT%.venv\Scripts\python.exe" (
+  echo [ERRO] Ambiente Python nao encontrado. Execute install.bat primeiro.
+  pause
+  exit /b 1
+)
+if not exist "%ROOT%frontend\node_modules" (
+  echo [ERRO] Dependencias do frontend nao encontradas. Execute install.bat primeiro.
+  pause
+  exit /b 1
+)
+
 echo ====================================================
-echo    BIM SCHEDULE — Inicializador do Sistema (Fase 2)
+echo       BIM SCHEDULE - Inicializador
 echo ====================================================
 echo.
-
-echo [1/2] Iniciando Servidor Backend (FastAPI na porta 8000)...
-start "BIM SCHEDULE - Backend" cmd /k "cd backend && python -m uvicorn app.main:app --reload --port 8000"
-
-echo [2/2] Iniciando Servidor Frontend (Vite na porta 3000)...
-start "BIM SCHEDULE - Frontend" cmd /k "cd frontend && npm run dev"
-
+start "BIM SCHEDULE - Backend" cmd /k "cd /d ""%ROOT%backend"" && set ""PYTHONPATH=%ROOT%backend"" && ""%ROOT%.venv\Scripts\python.exe"" -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
+start "BIM SCHEDULE - Frontend" cmd /k "cd /d ""%ROOT%frontend"" && npm run dev -- --host 127.0.0.1"
+echo Backend: http://127.0.0.1:8000
+echo Swagger: http://127.0.0.1:8000/docs
+echo Frontend: http://127.0.0.1:3000
 echo.
-echo ====================================================
-echo    SISTEMA INICIALIZADO COM SUCESSO!
-echo ====================================================
-echo - Backend API: http://localhost:8000
-echo - Documentacao API (Swagger): http://localhost:8000/docs
-echo - Frontend WEB: http://localhost:3000
-echo.
-echo Pressione qualquer tecla para fechar esta janela de controle...
-pause >nul
+echo Os dois terminais serao abertos separadamente. Feche-os para encerrar os servicos.
+pause
