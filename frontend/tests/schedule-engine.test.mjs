@@ -7,6 +7,7 @@ const html = await readFile(new URL("../public/demo.html", import.meta.url), "ut
 
 test("a demonstração carrega os módulos e liga a página IFC ao renderer correto", () => {
   assert.match(html, /ifc:ifcPage/);
+  assert.match(html, /risks,audit,weather,exchange/);
   assert.match(html, /<script src="\.\/schedule-enhancements\.js"><\/script>/);
   for (const binding of ["window.financial=financial", "window.resources=resources", "window.risks=risks", "window.audit=audit", "window.ifcPage=ifcPage", "window.bim=bim", "window.weather=weather", "window.exchange=exchange", "window.render=render", "titles.weather", "titles.exchange"]) {
     assert.ok(source.includes(binding), `Vínculo ausente: ${binding}`);
