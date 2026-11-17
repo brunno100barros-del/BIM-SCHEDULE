@@ -20,12 +20,12 @@ Aplicação web do ecossistema BIMOFFICE para organizar EAP, atividades, preced�
 - Arquivamento de versões e comparação inicial de GlobalIds adicionados/removidos.
 
 ### Controle e análise
-- Custos por atividade, custo real informado, EV, PV aproximado, AC, SPI, CPI e EAC.
+- Custos por atividade, custo real informado, EV, PV linear aproximado calculado por data de status, AC, SPI, CPI e EAC.
 - Cadastro de recursos, alocação às atividades e alerta básico de sobrealocação.
 - Estimativas otimista, mais provável e pessimista; PERT e Monte Carlo com distribuição triangular.
 - Consulta de previsão meteorológica pelo Open-Meteo, sem chave de API.
 - Intercâmbio de contexto/sugestões em JSON com IA externa e aprovação manual.
-- Histórico e snapshots locais.
+- Histórico e snapshots locais, incluindo dados financeiros, calendário, recursos e vínculos IFC.
 - Exportação SpreadsheetML compatível com Excel e impressão do navegador para PDF.
 
 ## Como testar online
