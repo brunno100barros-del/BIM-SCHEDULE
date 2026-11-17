@@ -653,8 +653,19 @@
     if(b.hasAttribute("data-remove-resource")) { const id=Number(b.dataset.removeResource);ext.resources=ext.resources.filter(x=>x.id!==id);ext.assignments=ext.assignments.filter(x=>x.resourceId!==id);save();render(); }
     if(b.hasAttribute("data-remove-relation")) { const a=state.activities.find(x=>x.id===Number(b.dataset.removeRelation)); if(a){a.relations=relationsFor(a).filter(r=>Number(r.predecessorId)!==Number(b.dataset.pred));a.preds=a.relations.map(r=>r.predecessorId);save();render();} }
     if(b.hasAttribute("data-calendar")) { page="gantt";render();document.getElementById("calendar-form")?.scrollIntoView({behavior:"smooth"}); }
-    if(b.hasAttribute("data-snapshot")) { ext.snapshots.unshift({name:"Versão "+(ext.snapshots.length+1),createdAt:new Date().toLocaleString("pt-BR"),activities:JSON.parse(JSON.stringify(state.activities)),calendar:JSON.parse(JSON.stringify(ext.calendar)),resources:JSON.parse(JSON.stringify(ext.resources)),assignments:JSON.parse(JSON.stringify(ext.assignments))});ext.snapshots=ext.snapshots.slice(0,30);save();render();notifyUser("Snapshot salvo."); }
-    if(b.dataset.restoreSnapshot!==undefined) { const s=ext.snapshots[Number(b.dataset.restoreSnapshot)];if(s&&confirm("Restaurar esta versão? As atividades atuais serão substituídas.")){state.activities=JSON.parse(JSON.stringify(s.activities));ext.calendar=s.calendar;ext.resources=s.resources;ext.assignments=s.assignments;save();render();} }
+    if(b.hasAttribute("data-snapshot")) { ext.snapshots.unshift({
+      name:"Versão "+(ext.snapshots.length+1), createdAt:new Date().toLocaleString("pt-BR"),
+      activities:JSON.parse(JSON.stringify(state.activities)), calendar:JSON.parse(JSON.stringify(ext.calendar)),
+      resources:JSON.parse(JSON.stringify(ext.resources)), assignments:JSON.parse(JSON.stringify(ext.assignments)),
+      actualCosts:JSON.parse(JSON.stringify(ext.actualCosts)), statusDay:ext.statusDay, deadline:ext.deadline,
+      weather:JSON.parse(JSON.stringify(ext.weather)), ifcMappings:JSON.parse(JSON.stringify(ifcModel?.mappings||{}))
+    });
+    ext.snapshots=ext.snapshots.slice(0,30); logEvent("Snapshot salvo","Versão "+ext.snapshots[0].name+" registrada localmente."); save(); render(); notifyUser("Snapshot salvo."); }
+    if(b.dataset.restoreSnapshot!==undefined) { const s=ext.snapshots[Number(b.dataset.restoreSnapshot)];if(s&&confirm("Restaurar esta versão? As atividades atuais serão substituídas.")){state.activities=JSON.parse(JSON.stringify(s.activities));
+      ext.calendar=s.calendar||{...defaults.calendar}; ext.resources=s.resources||[]; ext.assignments=s.assignments||[];
+      ext.actualCosts=s.actualCosts||{}; ext.statusDay=Number(s.statusDay)||0; ext.deadline=Number(s.deadline)||0;
+      ext.weather=s.weather||{...defaults.weather}; if(ifcModel)ifcModel.mappings=s.ifcMappings||{};
+      logEvent("Snapshot restaurado",s.name); save();render();} }
     if(b.hasAttribute("data-export-excel")) exportExcel();
     if(b.hasAttribute("data-print-pdf")) window.print();
     if(b.hasAttribute("data-export-ai")) downloadText("BIM-SCHEDULE-contexto-IA.json",JSON.stringify({format:"bim-schedule-ai-context",version:1,project:projectPayload()},null,2),"application/json");
