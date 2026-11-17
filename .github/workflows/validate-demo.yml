@@ -1,6 +1,8 @@
 name: Validate browser demo script
 
 on:
+  push:
+    branches: [feature/ifc-browser-schedule-engine]
   pull_request:
     branches: [main]
   workflow_dispatch:
