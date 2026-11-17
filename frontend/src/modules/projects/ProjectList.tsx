@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { FolderKanban, Plus, Search, Calendar, Building2, MoreVertical, Copy, Edit3, Trash2, ArrowRight } from 'lucide-react';
 import { Project } from '../../types/project';
 import { projectService } from '../../services/api';
+import { getErrorMessage } from '../../services/apiClient';
 import { ProjectModal } from '../../components/ProjectModal';
+import { ErrorState, LoadingState, Notice, NoticeTone } from '../../components/feedback/StatusViews';
+import { ProjectCreateInput } from '../../types/project';
 
 interface ProjectListProps {
   onSelectProject: (project: Project) => void;
@@ -15,14 +18,17 @@ export const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject }) => 
   const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [actionMenuId, setActionMenuId] = useState<number | null>(null);
+  const [loadError, setLoadError] = useState<string>('');
+  const [notice, setNotice] = useState<{ tone: NoticeTone; text: string } | null>(null);
 
   const fetchProjects = async () => {
     try {
       setLoading(true);
+      setLoadError('');
       const data = await projectService.getAll();
       setProjects(data);
     } catch (err) {
-      console.error(err);
+      setLoadError(getErrorMessage(err, 'Não foi possível carregar os projetos.'));
     } finally {
       setLoading(false);
     }
@@ -30,25 +36,37 @@ export const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject }) => 
 
   useEffect(() => { fetchProjects(); }, []);
 
-  const handleSave = async (formData: any) => {
+  // Erros de gravação são exibidos pelo próprio formulário (ProjectModal).
+  const handleSave = async (formData: ProjectCreateInput) => {
     if (projectToEdit) {
       await projectService.update(projectToEdit.id, formData);
+      setNotice({ tone: 'success', text: 'Projeto atualizado.' });
     } else {
-      await projectService.create(formData);
+      const created = await projectService.create(formData);
+      setNotice({ tone: 'success', text: `Projeto ${created.code} criado e salvo.` });
     }
     await fetchProjects();
   };
 
   const handleDelete = async (id: number) => {
-    if (window.confirm('Tem certeza que deseja excluir este projeto?')) {
+    if (!window.confirm('Tem certeza que deseja excluir este projeto?')) return;
+    try {
       await projectService.delete(id);
+      setNotice({ tone: 'success', text: 'Projeto excluído.' });
       await fetchProjects();
+    } catch (err) {
+      setNotice({ tone: 'error', text: getErrorMessage(err, 'Não foi possível excluir o projeto.') });
     }
   };
 
   const handleDuplicate = async (id: number) => {
-    await projectService.duplicate(id);
-    await fetchProjects();
+    try {
+      const copy = await projectService.duplicate(id);
+      setNotice({ tone: 'success', text: `Cópia ${copy.code} criada.` });
+      await fetchProjects();
+    } catch (err) {
+      setNotice({ tone: 'error', text: getErrorMessage(err, 'Não foi possível duplicar o projeto.') });
+    }
   };
 
   const filtered = projects.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.code.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -80,8 +98,12 @@ export const ProjectList: React.FC<ProjectListProps> = ({ onSelectProject }) => 
         <div className="text-xs text-slate-400">Total: <span className="text-slate-100 font-bold">{projects.length}</span></div>
       </div>
 
+      {notice && <Notice tone={notice.tone} onDismiss={() => setNotice(null)}>{notice.text}</Notice>}
+
       {loading ? (
-        <div className="text-center py-20 text-slate-400">Carregando projetos...</div>
+        <LoadingState message="Carregando projetos…" className="py-20" />
+      ) : loadError ? (
+        <ErrorState title="Não foi possível carregar os projetos" message={loadError} onRetry={fetchProjects} />
       ) : filtered.length === 0 ? (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center space-y-4">
           <p className="text-slate-400">Nenhum projeto encontrado.</p>

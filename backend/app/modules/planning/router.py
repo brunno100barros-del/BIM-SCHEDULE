@@ -1,66 +1,17 @@
-from datetime import date
-from typing import Optional
-import math
+"""Rotas de planejamento: EAP, atividades, precedências, CPM e vínculos com elementos IFC."""
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, Field, ConfigDict
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
+from app.models.ifc import IfcElementModel, IfcModelModel
 from app.models.project import ProjectModel
-from app.models.wbs_activity import ActivityModel, PrecedenceModel, WbsNodeModel, ActivityIfcElementModel
-from app.models.ifc import IfcElementModel
-from app.engine.cpm_pert import analyze_cpm
+from app.models.wbs_activity import ActivityIfcElementModel, ActivityModel, PrecedenceModel, WbsNodeModel
+from app.modules.planning import service
+from app.modules.planning.schemas import (
+    ActivityCreate, ActivityUpdate, ElementLink, PrecedenceCreate, WbsCreate, WbsUpdate,
+)
 
 router = APIRouter()
-
-class ActivityCreate(BaseModel):
-    project_id: int
-    wbs_id: Optional[int] = None
-    name: str = Field(min_length=1, max_length=255)
-    code: str = Field(min_length=1, max_length=50)
-    description: Optional[str] = None
-    duration: float = Field(default=1.0, ge=0)
-    quantity: Optional[float] = Field(default=None, ge=0)
-    unit: Optional[str] = None
-    productivity: Optional[float] = Field(default=None, gt=0)
-    optimistic: Optional[float] = Field(default=None, ge=0)
-    most_likely: Optional[float] = Field(default=None, ge=0)
-    pessimistic: Optional[float] = Field(default=None, ge=0)
-
-class ActivityUpdate(BaseModel):
-    wbs_id: Optional[int] = None
-    name: Optional[str] = Field(default=None, min_length=1, max_length=255)
-    code: Optional[str] = Field(default=None, min_length=1, max_length=50)
-    description: Optional[str] = None
-    duration: Optional[float] = Field(default=None, ge=0)
-    quantity: Optional[float] = Field(default=None, ge=0)
-    unit: Optional[str] = None
-    productivity: Optional[float] = Field(default=None, gt=0)
-    percent_complete: Optional[float] = Field(default=None, ge=0, le=100)
-    status: Optional[str] = None
-
-class PrecedenceCreate(BaseModel):
-    predecessor_id: int
-    successor_id: int
-    relation_type: str = "FS"
-    lag: float = 0.0
-
-class WbsCreate(BaseModel):
-    project_id: int
-    name: str = Field(min_length=1, max_length=255)
-    code: str = Field(min_length=1, max_length=50)
-    description: Optional[str] = None
-    parent_id: Optional[int] = None
-    sort_order: int = 0
-
-class WbsUpdate(BaseModel):
-    name: Optional[str] = None
-    code: Optional[str] = None
-    description: Optional[str] = None
-    parent_id: Optional[int] = None
-    sort_order: Optional[int] = None
-
-class ElementLink(BaseModel):
-    ifc_element_id: int
 
 @router.get("/project/{project_id}")
 def list_activities(project_id: int, db: Session = Depends(get_db)):
@@ -128,13 +79,8 @@ def create_precedence(data: PrecedenceCreate, db: Session = Depends(get_db)):
         raise HTTPException(400, "As atividades precisam pertencer ao mesmo projeto.")
     if predecessor.id == successor.id:
         raise HTTPException(400, "Uma atividade não pode preceder a si mesma.")
-    # Testa a rede incluindo a nova relação para impedir ciclos.
-    current = db.query(PrecedenceModel).filter(PrecedenceModel.predecessor_id.in_([a.id for a in db.query(ActivityModel.id).filter(ActivityModel.project_id == predecessor.project_id).all()])).all()
-    candidate = [{"predecessor_id": p.predecessor_id, "successor_id": p.successor_id, "relation_type": p.relation_type, "lag": p.lag} for p in current]
-    candidate.append({**data.model_dump(), "relation_type": relation})
-    acts = db.query(ActivityModel).filter(ActivityModel.project_id == predecessor.project_id).all()
     try:
-        analyze_cpm([{"id": a.id, "duration": a.duration} for a in acts], candidate)
+        service.ensure_network_is_valid(db, predecessor.project_id, {**data.model_dump(), "relation_type": relation})
     except ValueError as exc:
         raise HTTPException(400, str(exc))
     prec = PrecedenceModel(**{**data.model_dump(), "relation_type": relation})
@@ -153,31 +99,8 @@ def run_cpm(project_id: int, db: Session = Depends(get_db)):
     project = db.query(ProjectModel).filter(ProjectModel.id == project_id).first()
     if not project:
         raise HTTPException(404, "Projeto não encontrado.")
-    acts = db.query(ActivityModel).filter(ActivityModel.project_id == project_id).all()
-    if not acts:
-        return {"status": "empty", "message": "Nenhuma atividade encontrada", "results": {}}
-    ids = [a.id for a in acts]
-    precs = db.query(PrecedenceModel).filter(PrecedenceModel.predecessor_id.in_(ids), PrecedenceModel.successor_id.in_(ids)).all()
     try:
-        deadline = None
-        if project.start_date and project.end_date:
-            start = date.fromisoformat(project.start_date[:10])
-            end = date.fromisoformat(project.end_date[:10])
-            if end < start:
-                raise ValueError("A data final do projeto é anterior à data inicial.")
-            deadline = float((end - start).days)
-        summary = analyze_cpm(
-            [{"id": a.id, "duration": a.duration} for a in acts],
-            [{"predecessor_id": p.predecessor_id, "successor_id": p.successor_id, "relation_type": p.relation_type, "lag": p.lag} for p in precs],
-            project_deadline=deadline,
-            project_start=0.0,
-        )
-        for aid, result in summary["activities"].items():
-            act = next(a for a in acts if a.id == aid)
-            for field in ("es", "ef", "ls", "lf", "tf", "ff", "is_critical"):
-                setattr(act, field, result[field])
-        db.commit()
-        return {"status": "success", **summary}
+        return service.calculate_project_cpm(db, project)
     except (ValueError, OverflowError) as exc:
         db.rollback()
         raise HTTPException(400, str(exc))
@@ -235,7 +158,6 @@ def link_ifc_element(act_id: int, data: ElementLink, db: Session = Depends(get_d
     act = db.query(ActivityModel).filter(ActivityModel.id == act_id).first()
     element = db.query(IfcElementModel).filter(IfcElementModel.id == data.ifc_element_id).first()
     if not act or not element: raise HTTPException(404, "Atividade ou elemento IFC não encontrado.")
-    from app.models.ifc import IfcModelModel
     model = db.query(IfcModelModel).filter(IfcModelModel.id == element.model_id).first()
     if not model or model.project_id != act.project_id: raise HTTPException(400, "O elemento IFC não pertence ao projeto da atividade.")
     link = db.query(ActivityIfcElementModel).filter_by(activity_id=act_id, ifc_element_id=element.id).first()

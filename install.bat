@@ -38,10 +38,12 @@ if errorlevel 1 goto :fail
 "%ROOT%.venv\Scripts\python.exe" -m pip install -r "%ROOT%backend\requirements.txt"
 if errorlevel 1 goto :fail
 
-echo [3/5] Executando migracoes do banco de dados...
+echo [3/5] Preparando a pasta de dados e o banco...
+echo       Dados em %%LOCALAPPDATA%%\BIM-SCHEDULE. Dados de versoes anteriores (backend\bim_schedule.db
+echo       e backend\uploads) sao COPIADOS e validados; os originais nao sao alterados.
 cd /d "%ROOT%backend"
 set "PYTHONPATH=%ROOT%backend"
-"%ROOT%.venv\Scripts\python.exe" -m alembic upgrade head
+"%ROOT%.venv\Scripts\python.exe" -m app prepare
 if errorlevel 1 goto :fail
 
 echo [4/5] Instalando dependencias do frontend...

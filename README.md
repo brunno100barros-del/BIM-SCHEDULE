@@ -55,12 +55,37 @@ A página online só será atualizada depois que as alterações forem integrada
 - **Exportação:** a planilha é SpreadsheetML com extensão .xls, não XLSX nativo. PDF usa o diálogo de impressão do navegador.
 - **Auditoria:** histórico e snapshots são locais e editáveis, não trilha imutável corporativa.
 
-## Execução local
+## Arquitetura (0.6.0-dev)
+
+- **Aplicação principal** (versões local e Windows): React + Vite conectada ao **serviço local** FastAPI em `127.0.0.1`.
+- **GitHub Pages**: publica somente a **demonstração estática** (dados fictícios no navegador). O Pages não executa o backend.
+- **Dados**: `%LOCALAPPDATA%\BIM-SCHEDULE` (banco SQLite, IFC, logs e backups). Instalações anteriores são migradas por cópia validada; os arquivos originais em `backend\` não são alterados.
+- Documentação: [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) · Windows: [`WINDOWS_DESKTOP.md`](docs/architecture/WINDOWS_DESKTOP.md) · IA: [`AI_INTEGRATION.md`](docs/architecture/AI_INTEGRATION.md) · Relatório da Etapa 2: [`docs/reports/ETAPA-02.md`](docs/reports/ETAPA-02.md).
+
+As seções anteriores deste README descrevem os módulos da **demonstração estática**, e não da aplicação principal.
+
+## Execução local (Windows)
 
 1. Extraia o repositório.
-2. Execute `install.bat`.
+2. Execute `install.bat`. Ele instala as dependências e prepara a pasta de dados (`python -m app prepare`).
 3. Execute `start.bat`.
 4. Acesse `http://127.0.0.1:3000`.
 5. API local: `http://127.0.0.1:8000`; documentação: `http://127.0.0.1:8000/docs`.
 
-Consulte `STATUS.md`, `IMPLEMENTATION_PLAN.md`, `AUDIT.md` e `TEST_REPORT.md` antes de usar em um projeto real.
+Se o serviço não estiver em execução, a aplicação mostra como iniciá-lo e oferece o link para a demonstração.
+
+## Testes
+
+```bash
+cd backend && python -m pytest -q
+```
+
+```bash
+cd frontend && npm test && npm run build
+```
+
+```bash
+cd frontend && npx playwright install chromium && npm run test:e2e
+```
+
+Consulte `STATUS.md`, `docs/reports/ETAPA-02.md`, `AUDIT.md` e `TEST_REPORT.md` antes de usar em um projeto real.

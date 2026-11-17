@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { planningService } from '../../services/planning';
+import { getErrorMessage } from '../../services/apiClient';
 import { FolderTree, Plus, Trash2, RefreshCw, Pencil, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface Props { projectId: number }
@@ -19,11 +20,11 @@ export const WbsModule: React.FC<Props> = ({ projectId }) => {
     setLoading(true); setError('');
     try {
       const [wbs, acts] = await Promise.all([
-        axios.get(`/api/v1/activities/project/${projectId}/wbs`),
-        axios.get(`/api/v1/activities/project/${projectId}`),
+        planningService.listWbs(projectId),
+        planningService.listActivities(projectId),
       ]);
-      setNodes(wbs.data); setActivities(acts.data);
-    } catch (e: any) { setError(e.response?.data?.detail || 'Não foi possível carregar a EAP.'); }
+      setNodes(wbs); setActivities(acts);
+    } catch (e: any) { setError(getErrorMessage(e, 'Não foi possível carregar a EAP.')); }
     finally { setLoading(false); }
   };
   useEffect(() => { load(); }, [projectId]);
@@ -46,8 +47,8 @@ export const WbsModule: React.FC<Props> = ({ projectId }) => {
     if (nextName === null || !nextName.trim()) return;
     const nextCode = window.prompt('Código do item da EAP:', node.code);
     if (nextCode === null || !nextCode.trim()) return;
-    try { await axios.put(`/api/v1/activities/wbs/${node.id}`, { name: nextName.trim(), code: nextCode.trim() }); await load(); }
-    catch (e: any) { setError(e.response?.data?.detail || 'Falha ao editar item da EAP.'); }
+    try { await planningService.updateWbs(node.id, { name: nextName.trim(), code: nextCode.trim() }); await load(); }
+    catch (e: any) { setError(getErrorMessage(e, 'Falha ao editar item da EAP.')); }
   };
   const moveNode = async (node: WbsNode, direction: number) => {
     const siblings = nodes.filter(n => (n.parent_id ?? null) === (node.parent_id ?? null)).sort((a,b)=>a.sort_order-b.sort_order || a.id-b.id);
@@ -56,22 +57,22 @@ export const WbsModule: React.FC<Props> = ({ projectId }) => {
     const reordered = [...siblings];
     [reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]];
     try {
-      await Promise.all(reordered.map((item, position) => axios.put(`/api/v1/activities/wbs/${item.id}`, { sort_order: position })));
+      await Promise.all(reordered.map((item, position) => planningService.updateWbs(item.id, { sort_order: position })));
       await load();
-    } catch (e: any) { setError(e.response?.data?.detail || 'Falha ao reordenar EAP.'); }
+    } catch (e: any) { setError(getErrorMessage(e, 'Falha ao reordenar EAP.')); }
   };
   const deleteNode = async (node: WbsNode) => {
     if (!window.confirm(`Excluir ${node.code} — ${node.name}? Os níveis filhos também serão excluídos e as atividades ficarão sem vínculo com este nó.`)) return;
-    try { await axios.delete(`/api/v1/activities/wbs/${node.id}`); await load(); }
-    catch (e: any) { setError(e.response?.data?.detail || 'Falha ao excluir item da EAP.'); }
+    try { await planningService.deleteWbs(node.id); await load(); }
+    catch (e: any) { setError(getErrorMessage(e, 'Falha ao excluir item da EAP.')); }
   };
 
   const createNode = async (e: React.FormEvent) => {
     e.preventDefault(); setError('');
     try {
-      await axios.post('/api/v1/activities/wbs', { project_id: projectId, name, code, parent_id: parentId === '' ? null : Number(parentId) });
+      await planningService.createWbs({ project_id: projectId, name, code, parent_id: parentId === '' ? null : Number(parentId) });
       setName(''); setCode(''); setParentId(''); await load();
-    } catch (e: any) { setError(e.response?.data?.detail || 'Falha ao criar item da EAP.'); }
+    } catch (e: any) { setError(getErrorMessage(e, 'Falha ao criar item da EAP.')); }
   };
 
   return <div className="p-8 max-w-7xl mx-auto space-y-6">

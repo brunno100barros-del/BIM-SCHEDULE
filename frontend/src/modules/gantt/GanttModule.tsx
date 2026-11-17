@@ -1,11 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import axios from 'axios';
+import { planningService } from '../../services/planning';
+import { getErrorMessage } from '../../services/apiClient';
+import { Activity, CpmSummary, Precedence, WbsNode } from '../../types/api';
 import { CalendarDays, Play, Plus, Trash2, Link2, RefreshCw } from 'lucide-react';
 
 interface GanttModuleProps { projectId: number }
-interface Activity { id: number; project_id: number; wbs_id?: number | null; name: string; code: string; duration: number; es: number; ef: number; ls: number; lf: number; tf: number; ff: number; is_critical: number }
-interface Precedence { id: number; predecessor_id: number; successor_id: number; relation_type: string; lag: number }
-interface WbsNode { id: number; code: string; name: string }
 
 export const GanttModule: React.FC<GanttModuleProps> = ({ projectId }) => {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -19,7 +18,7 @@ export const GanttModule: React.FC<GanttModuleProps> = ({ projectId }) => {
   const [succId, setSuccId] = useState<number | ''>('');
   const [relation, setRelation] = useState('FS');
   const [lag, setLag] = useState(0);
-  const [summary, setSummary] = useState<any>(null);
+  const [summary, setSummary] = useState<CpmSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -27,12 +26,12 @@ export const GanttModule: React.FC<GanttModuleProps> = ({ projectId }) => {
     setLoading(true); setError('');
     try {
       const [acts, relations, wbsRes] = await Promise.all([
-        axios.get(`/api/v1/activities/project/${projectId}`),
-        axios.get(`/api/v1/activities/project/${projectId}/precedences`),
-        axios.get(`/api/v1/activities/project/${projectId}/wbs`),
+        planningService.listActivities(projectId),
+        planningService.listPrecedences(projectId),
+        planningService.listWbs(projectId),
       ]);
-      setActivities(acts.data); setPrecs(relations.data); setWbs(wbsRes.data);
-    } catch (e: any) { setError(e.response?.data?.detail || 'Falha ao carregar o cronograma.'); }
+      setActivities(acts); setPrecs(relations); setWbs(wbsRes);
+    } catch (e: any) { setError(getErrorMessage(e, 'Falha ao carregar o cronograma.')); }
     finally { setLoading(false); }
   };
   useEffect(() => { fetchData(); setSummary(null); }, [projectId]);
@@ -40,41 +39,40 @@ export const GanttModule: React.FC<GanttModuleProps> = ({ projectId }) => {
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault(); setError('');
     try {
-      await axios.post('/api/v1/activities/', { project_id: projectId, wbs_id: wbsId === '' ? null : Number(wbsId), name, code, duration: Number(duration) });
+      await planningService.createActivity({ project_id: projectId, wbs_id: wbsId === '' ? null : Number(wbsId), name, code, duration: Number(duration) });
       setName(''); setCode(''); setSummary(null); await fetchData();
-    } catch (e: any) { setError(e.response?.data?.detail || 'Erro ao cadastrar atividade.'); }
+    } catch (e: any) { setError(getErrorMessage(e, 'Erro ao cadastrar atividade.')); }
   };
 
   const handleAddPrecedence = async (e: React.FormEvent) => {
     e.preventDefault(); setError('');
     try {
-      await axios.post('/api/v1/activities/precedences', { predecessor_id: Number(predId), successor_id: Number(succId), relation_type: relation, lag: Number(lag) });
+      await planningService.createPrecedence({ predecessor_id: Number(predId), successor_id: Number(succId), relation_type: relation, lag: Number(lag) });
       setPredId(''); setSuccId(''); setSummary(null); await fetchData();
-    } catch (e: any) { setError(e.response?.data?.detail || 'Erro ao cadastrar precedência.'); }
+    } catch (e: any) { setError(getErrorMessage(e, 'Erro ao cadastrar precedência.')); }
   };
 
   const handleRunCPM = async () => {
     setError('');
     try {
-      const res = await axios.post(`/api/v1/activities/project/${projectId}/calculate-cpm`);
-      setSummary(res.data); await fetchData();
-    } catch (e: any) { setError(e.response?.data?.detail || 'Erro ao calcular CPM.'); }
+      setSummary(await planningService.calculateCpm(projectId)); await fetchData();
+    } catch (e: any) { setError(getErrorMessage(e, 'Erro ao calcular CPM.')); }
   };
 
   const handleUpdateDuration = async (activity: Activity, nextDuration: number) => {
     if (!Number.isFinite(nextDuration) || nextDuration < 0 || nextDuration === activity.duration) return;
-    try { await axios.put(`/api/v1/activities/${activity.id}`, { duration: nextDuration }); setSummary(null); await fetchData(); }
-    catch (e: any) { setError(e.response?.data?.detail || 'Falha ao atualizar duração.'); }
+    try { await planningService.updateActivity(activity.id, { duration: nextDuration }); setSummary(null); await fetchData(); }
+    catch (e: any) { setError(getErrorMessage(e, 'Falha ao atualizar duração.')); }
   };
 
   const handleDeleteActivity = async (id: number) => {
     if (!window.confirm('Excluir esta atividade e suas relações de precedência?')) return;
-    try { await axios.delete(`/api/v1/activities/${id}`); setSummary(null); await fetchData(); }
-    catch (e: any) { setError(e.response?.data?.detail || 'Erro ao excluir atividade.'); }
+    try { await planningService.deleteActivity(id); setSummary(null); await fetchData(); }
+    catch (e: any) { setError(getErrorMessage(e, 'Erro ao excluir atividade.')); }
   };
   const handleDeletePrecedence = async (id: number) => {
-    try { await axios.delete(`/api/v1/activities/precedences/${id}`); setSummary(null); await fetchData(); }
-    catch (e: any) { setError(e.response?.data?.detail || 'Erro ao excluir precedência.'); }
+    try { await planningService.deletePrecedence(id); setSummary(null); await fetchData(); }
+    catch (e: any) { setError(getErrorMessage(e, 'Erro ao excluir precedência.')); }
   };
 
   const hasSchedule = activities.some(a => a.ef !== 0 || a.lf !== 0 || a.es !== 0 || a.is_critical === 1);

@@ -16,6 +16,8 @@ class IfcModelModel(Base):
     progress = Column(Integer, default=0, nullable=False)
     processing_message = Column(String(255), nullable=True)
     uploaded_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # Tarefa de processamento mais recente deste modelo (tabela jobs).
+    job_id = Column(String(32), nullable=True, index=True)
 
 class IfcElementModel(Base):
     __tablename__ = "ifc_elements"

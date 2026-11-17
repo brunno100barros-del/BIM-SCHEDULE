@@ -12,3 +12,9 @@ backend/uploads/
 
 # Web-IFC WASM (copied by frontend postinstall)
 frontend/public/*.wasm
+
+# Site do GitHub Pages gerado por frontend/scripts/build-pages.mjs
+frontend/pages-dist/
+# Relatórios do Playwright
+frontend/playwright-report/
+frontend/test-results/
