@@ -202,3 +202,50 @@ def test_j6_recovery_runs_consistency_before_interrupted(settings):
         assert failed_hook["status"] == "interrupted"
         assert failed_hook["message"].endswith("a rotina de consistência dos dados também falhou")
         assert "ATENÇÃO" in failed_hook["error"]  # diagnóstico visível pela API
+
+
+# --------------------------------------------------------------------------- recuperação pendente (Etapa 3)
+def test_failed_consistency_marks_recovery_pending_and_retry_clears_it(client, runtime, tmp_path):
+    flag = tmp_path / "rotina-falha"
+    flag.write_text("1")
+    job = runtime.jobs.submit("system.diagnostic", {"steps": 5, "step_seconds": 0.01, "crash_at": 2,
+                                                    "abort_hook_fail_flag": str(flag), "abort_marker": True})
+    final = runtime.jobs.wait(job["id"])
+    assert final["status"] == "failed"
+    assert final["recovery_pending"] is True and final["recovery_attempts"] == 1
+    assert "falha simulada e temporária" in final["recovery_error"]
+    assert "Recuperação pendente" in final["error"]
+    pending = client.get("/api/v1/jobs/?recovery_pending=true").json()
+    assert [j["id"] for j in pending] == [job["id"]]  # diagnóstico visível pela API
+
+    still = client.post(f"/api/v1/jobs/{job['id']}/retry-recovery").json()
+    assert still["recovery_pending"] is True and still["recovery_attempts"] == 2  # causa persiste
+
+    flag.unlink()  # causa resolvida
+    done = client.post(f"/api/v1/jobs/{job['id']}/retry-recovery").json()
+    assert done["recovery_pending"] is False and done["recovery_error"] is None and done["recovery_attempts"] == 3
+    assert done["status"] == "failed" and done["result"] == {"abort_hook": "failed"}  # a rotina rodou
+    assert client.get("/api/v1/jobs/?recovery_pending=true").json() == []
+
+
+def test_pending_recovery_is_retried_on_startup(settings, tmp_path):
+    flag = tmp_path / "rotina-falha-inicio"
+    flag.write_text("1")
+    app = create_app(settings)
+    with TestClient(app):
+        runtime = app.state.runtime
+        job = runtime.jobs.submit("system.diagnostic", {"steps": 5, "step_seconds": 0.01, "crash_at": 2,
+                                                        "abort_hook_fail_flag": str(flag), "abort_marker": True})
+        assert runtime.jobs.wait(job["id"])["recovery_pending"] is True
+    flag.unlink()
+    with TestClient(create_app(settings)) as client:
+        recovered = client.get(f"/api/v1/jobs/{job['id']}").json()
+        assert recovered["recovery_pending"] is False and recovered["result"] == {"abort_hook": "failed"}
+
+
+def test_retry_recovery_on_job_without_pending_is_a_no_op(client, runtime):
+    job = runtime.jobs.submit("system.diagnostic", {"steps": 1, "step_seconds": 0.01})
+    runtime.jobs.wait(job["id"])
+    same = client.post(f"/api/v1/jobs/{job['id']}/retry-recovery").json()
+    assert same["recovery_pending"] is False and same["recovery_attempts"] == 0 and same["status"] == "completed"
+    assert client.post("/api/v1/jobs/inexistente/retry-recovery").status_code == 404

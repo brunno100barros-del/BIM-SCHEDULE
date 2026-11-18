@@ -30,6 +30,12 @@ JOB_KINDS: dict[str, JobKind] = {
         abort_hook="app.modules.ifc.jobs:on_parse_aborted",
         description="Leitura de um arquivo IFC e extração de elementos, propriedades e quantitativos.",
     ),
+    "ifc.delete_revision": JobKind(
+        name="ifc.delete_revision",
+        target="app.modules.ifc.jobs:delete_revision_job",
+        abort_hook="app.modules.ifc.jobs:on_delete_aborted",
+        description="Remoção de uma revisão IFC: vínculos, elementos (em lotes) e arquivo.",
+    ),
     "system.diagnostic": JobKind(
         name="system.diagnostic",
         target="app.jobs.diagnostic:diagnostic_job",

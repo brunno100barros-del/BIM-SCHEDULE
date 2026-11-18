@@ -73,6 +73,10 @@ def job_to_dict(job: JobModel) -> dict[str, Any]:
         "updated_at": job.updated_at,
         "finished_at": job.finished_at,
         "is_terminal": job.status in TERMINAL_STATUSES,
+        "recovery_pending": bool(job.recovery_pending),
+        "recovery_error": job.recovery_error,
+        "recovery_attempts": job.recovery_attempts or 0,
+        "recovery_updated_at": job.recovery_updated_at,
     }
 
 
@@ -100,6 +104,7 @@ class JobManager:
         if self._started:
             return
         self._recover_stale_jobs()
+        self._retry_pending_recoveries()
         for index in range(self.max_workers):
             thread = threading.Thread(target=self._supervise, name=f"bim-job-supervisor-{index}", daemon=True)
             thread.start()
@@ -168,13 +173,16 @@ class JobManager:
             job = db.get(JobModel, job_id)
             return job_to_dict(job) if job else None
 
-    def list(self, *, project_id: Optional[int] = None, kind: Optional[str] = None, limit: int = 50) -> list[dict]:
+    def list(self, *, project_id: Optional[int] = None, kind: Optional[str] = None, limit: int = 50,
+             recovery_pending: Optional[bool] = None) -> list[dict]:
         with self._sessions() as db:
             query = db.query(JobModel)
             if project_id is not None:
                 query = query.filter(JobModel.project_id == project_id)
             if kind:
                 query = query.filter(JobModel.kind == kind)
+            if recovery_pending is not None:
+                query = query.filter(JobModel.recovery_pending == recovery_pending)
             return [job_to_dict(j) for j in query.order_by(JobModel.created_at.desc()).limit(limit).all()]
 
     def cancel(self, job_id: str) -> Optional[dict]:
@@ -198,6 +206,36 @@ class JobManager:
         else:
             self._request_cancel(job_id, reason="Cancelamento solicitado pelo usuário")
         return self.get(job_id)
+
+    def retry_recovery(self, job_id: str) -> Optional[dict]:
+        """Executa de novo a rotina de consistência de uma tarefa com recuperação pendente.
+
+        Só age sobre tarefas encerradas com ``recovery_pending``; a rotina é idempotente.
+        """
+        with self._sessions() as db:
+            job = db.get(JobModel, job_id)
+            if job is None:
+                return None
+            if not job.recovery_pending or job.status not in TERMINAL_STATUSES:
+                return job_to_dict(job)
+            kind, params, status = job.kind, json.loads(job.params_json or "{}"), job.status
+        hook_error = self._run_abort_hook(kind, job_id, params, status)
+        now = utcnow()
+        if hook_error:
+            self._transition(job_id, TERMINAL_STATUSES, recovery_error=hook_error[:2000],
+                             recovery_attempts=JobModel.recovery_attempts + 1, recovery_updated_at=now)
+            logger.error("Recuperação da tarefa %s continua pendente: %s", job_id, hook_error)
+        else:
+            self._transition(job_id, TERMINAL_STATUSES, recovery_pending=False, recovery_error=None,
+                             recovery_attempts=JobModel.recovery_attempts + 1, recovery_updated_at=now)
+            logger.info("Recuperação da tarefa %s concluída: consistência dos dados restaurada.", job_id)
+        return self.get(job_id)
+
+    def _retry_pending_recoveries(self) -> None:
+        with self._sessions() as db:
+            pending = [j.id for j in db.query(JobModel).filter(JobModel.recovery_pending.is_(True)).all()]
+        for job_id in pending:
+            self.retry_recovery(job_id)
 
     def active_count(self) -> int:
         with self._lock:
@@ -237,13 +275,18 @@ class JobManager:
         Retorna se o estado terminal foi gravado (False se outra parte já o encerrou).
         """
         hook_error = self._run_abort_hook(kind, job_id, params, status)
+        recovery: dict[str, Any] = {}
         if hook_error:
             message = f"{message}; a rotina de consistência dos dados também falhou"
             warning = (f"ATENÇÃO: a rotina de consistência dos dados falhou ({hook_error}); "
-                       "os registros relacionados podem ter ficado em estado intermediário. Consulte o log.")
+                       "os registros relacionados podem ter ficado em estado intermediário. "
+                       "Recuperação pendente: será tentada novamente na próxima inicialização "
+                       "ou por POST /api/v1/jobs/{id}/retry-recovery. Consulte o log.")
             error = f"{error} {warning}" if error else warning
+            recovery = {"recovery_pending": True, "recovery_error": hook_error[:2000],
+                        "recovery_attempts": JobModel.recovery_attempts + 1, "recovery_updated_at": utcnow()}
         closed = self._transition(job_id, from_statuses, status=status, message=message[:500],
-                                  error=error[:2000] if error else None, finished_at=utcnow())
+                                  error=error[:2000] if error else None, finished_at=utcnow(), **recovery)
         if not closed:
             logger.info("Tarefa %s já havia sido encerrada por outra parte; estado %s não aplicado.", job_id, status)
         return closed

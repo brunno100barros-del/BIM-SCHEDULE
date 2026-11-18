@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 from typing import Optional
 
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
+from app.models.ifc import IfcModelModel
 from app.models.project import ProjectModel
 from app.models.wbs_activity import ActivityModel, PrecedenceModel, WbsNodeModel
 
@@ -82,3 +84,26 @@ def duplicate_project(db: Session, project: ProjectModel) -> ProjectModel:
                     relation_type=rel.relation_type, lag=rel.lag,
                 ))
     return new_proj
+
+
+def remove_orphan_upload_files(db: Session, paths: list[str], uploads_dir: Path) -> int:
+    """Apaga arquivos IFC que ficaram sem nenhuma revisão no banco.
+
+    Só considera arquivos diretamente dentro da pasta de uploads; um arquivo ainda citado por
+    qualquer revisão restante (de qualquer projeto) é mantido.
+    """
+    removed = 0
+    root = uploads_dir.resolve()
+    for raw in paths:
+        path = Path(raw)
+        try:
+            resolved = path.resolve()
+        except OSError:
+            continue
+        if resolved.parent != root or not resolved.is_file():
+            continue
+        if db.query(IfcModelModel.id).filter(IfcModelModel.file_path == raw).first():
+            continue
+        resolved.unlink()
+        removed += 1
+    return removed

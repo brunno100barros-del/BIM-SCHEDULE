@@ -11,8 +11,9 @@ router = APIRouter()
 
 @router.get("/")
 def list_jobs(project_id: Optional[int] = None, kind: Optional[str] = None,
-              limit: int = Query(50, ge=1, le=200), runtime: Runtime = Depends(get_runtime)):
-    return runtime.jobs.list(project_id=project_id, kind=kind, limit=limit)
+              limit: int = Query(50, ge=1, le=200), recovery_pending: Optional[bool] = None,
+              runtime: Runtime = Depends(get_runtime)):
+    return runtime.jobs.list(project_id=project_id, kind=kind, limit=limit, recovery_pending=recovery_pending)
 
 
 @router.get("/{job_id}")
@@ -27,6 +28,15 @@ def get_job(job_id: str, runtime: Runtime = Depends(get_runtime)):
 def cancel_job(job_id: str, runtime: Runtime = Depends(get_runtime)):
     """Solicita o cancelamento. A tarefa encerra no próximo ponto de verificação."""
     job = runtime.jobs.cancel(job_id)
+    if job is None:
+        raise AppError(404, "Tarefa não encontrada.", code="job_not_found")
+    return job
+
+
+@router.post("/{job_id}/retry-recovery")
+def retry_recovery(job_id: str, runtime: Runtime = Depends(get_runtime)):
+    """Executa de novo a rotina de consistência de uma tarefa com recuperação pendente."""
+    job = runtime.jobs.retry_recovery(job_id)
     if job is None:
         raise AppError(404, "Tarefa não encontrada.", code="job_not_found")
     return job

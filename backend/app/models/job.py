@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text, text
 
 from app.core.database import Base
 
@@ -29,3 +29,8 @@ class JobModel(Base):
     started_at = Column(DateTime, nullable=True)
     updated_at = Column(DateTime, nullable=False, default=_utcnow, onupdate=_utcnow)
     finished_at = Column(DateTime, nullable=True)
+    # Etapa 3: a rotina de consistência falhou e precisa ser executada novamente.
+    recovery_pending = Column(Boolean, nullable=False, default=False, server_default=text("0"), index=True)
+    recovery_error = Column(Text, nullable=True)
+    recovery_attempts = Column(Integer, nullable=False, default=0, server_default=text("0"))
+    recovery_updated_at = Column(DateTime, nullable=True)

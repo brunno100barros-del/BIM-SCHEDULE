@@ -13,6 +13,30 @@ CancelCheck = Callable[[], None]
 CANCEL_CHECK_EVERY = 25  # elementos entre verificações de cancelamento
 
 
+def read_identity(ifc_file) -> tuple:
+    """GlobalId do IfcProject e cabeçalho STEP (software de autoria, data, autor) do arquivo."""
+    project_global_id = None
+    try:
+        projects = ifc_file.by_type("IfcProject")
+        project_global_id = getattr(projects[0], "GlobalId", None) if projects else None
+    except Exception:
+        project_global_id = None
+    header = {}
+    try:
+        file_name = ifc_file.header.file_name
+        for key in ("name", "time_stamp", "author", "organization", "preprocessor_version",
+                    "originating_system", "authorization"):
+            value = getattr(file_name, key, None)
+            if value not in (None, "", (), []):
+                header[key] = list(value) if isinstance(value, (list, tuple)) else value
+        description = getattr(ifc_file.header.file_description, "description", None)
+        if description:
+            header["description"] = list(description) if isinstance(description, (list, tuple)) else description
+    except Exception:
+        pass
+    return project_global_id, json.dumps(header, ensure_ascii=False, default=str) if header else None
+
+
 def parse_ifc_and_extract(filepath: str, model_id: int, db_session, *,
                           on_progress: Optional[ProgressCallback] = None,
                           check_cancel: Optional[CancelCheck] = None):
@@ -41,7 +65,9 @@ def parse_ifc_and_extract(filepath: str, model_id: int, db_session, *,
     if model:
         model.status = "processing"; model.progress = 0
         model.processing_message = "Modelo aberto; iniciando leitura dos elementos"
-        model.schema_name = schema_name; db_session.commit()
+        model.schema_name = schema_name
+        model.ifc_project_global_id, model.header_json = read_identity(ifc_file)
+        db_session.commit()
 
     try:
         from ifcopenshell.util.element import get_psets

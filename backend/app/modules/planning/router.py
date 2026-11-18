@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.ifc import IfcElementModel, IfcModelModel
+from app.models.ifc import REVISION_HIDDEN_STATUSES, IfcElementModel, IfcModelModel
 from app.models.project import ProjectModel
 from app.models.wbs_activity import ActivityIfcElementModel, ActivityModel, PrecedenceModel, WbsNodeModel
 from app.modules.planning import service
@@ -160,6 +160,8 @@ def link_ifc_element(act_id: int, data: ElementLink, db: Session = Depends(get_d
     if not act or not element: raise HTTPException(404, "Atividade ou elemento IFC não encontrado.")
     model = db.query(IfcModelModel).filter(IfcModelModel.id == element.model_id).first()
     if not model or model.project_id != act.project_id: raise HTTPException(400, "O elemento IFC não pertence ao projeto da atividade.")
+    if model.status in REVISION_HIDDEN_STATUSES:
+        raise HTTPException(400, "O elemento pertence a uma revisão IFC removida.")
     link = db.query(ActivityIfcElementModel).filter_by(activity_id=act_id, ifc_element_id=element.id).first()
     if not link:
         link = ActivityIfcElementModel(activity_id=act_id, ifc_element_id=element.id); db.add(link); db.commit(); db.refresh(link)

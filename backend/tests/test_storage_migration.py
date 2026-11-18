@@ -23,6 +23,10 @@ from app.core.storage import resolve_storage
 from app.main import create_app
 from conftest import make_settings
 
+from alembic.script import ScriptDirectory
+
+HEAD = ScriptDirectory.from_config(alembic_config("sqlite://")).get_current_head()
+
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -164,8 +168,8 @@ def test_schema_upgrade_from_previous_revision_keeps_rows(tmp_path):
     conn.close()
     with TestClient(create_app(make_settings(tmp_path))) as client:
         assert [p["code"] for p in client.get("/api/v1/projects/").json()] == ["OLD-1"]
-        assert client.get("/api/v1/system/status").json()["database"]["revision"] == "0002_jobs"
-    backups = list((data_dir / "backups").glob("*antes-0002_jobs.db"))
+        assert client.get("/api/v1/system/status").json()["database"]["revision"] == HEAD
+    backups = list((data_dir / "backups").glob(f"*antes-{HEAD}.db"))
     assert len(backups) == 1
     conn = sqlite3.connect(backups[0])
     assert conn.execute("SELECT code FROM projects").fetchall() == [("OLD-1",)]

@@ -13,7 +13,8 @@ from app.jobs.context import JobContext
 
 def diagnostic_job(ctx: JobContext, *, steps: int = 10, step_seconds: float = 0.05,
                    fail_at: int | None = None, ignore_cancel: bool = False, crash_at: int | None = None,
-                   abort_marker: bool = False, abort_hook_fails: bool = False) -> dict:
+                   abort_marker: bool = False, abort_hook_fails: bool = False,
+                   abort_hook_fail_flag: str | None = None) -> dict:
     # abort_marker / abort_hook_fails configuram apenas on_diagnostic_aborted.
     for step in range(1, steps + 1):
         if not ignore_cancel:
@@ -40,6 +41,12 @@ def on_diagnostic_aborted(db, *, job_id: str, params: dict, status: str) -> None
 
     if params.get("abort_hook_fails"):
         raise RuntimeError("falha simulada na rotina de consistência do diagnóstico")
+    flag = params.get("abort_hook_fail_flag")
+    if flag:
+        from pathlib import Path
+
+        if Path(flag).exists():  # falha enquanto o arquivo existir (testes de recuperação pendente)
+            raise RuntimeError("falha simulada e temporária na rotina de consistência")
     if not params.get("abort_marker"):
         return
     job = db.get(JobModel, job_id)

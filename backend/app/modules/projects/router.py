@@ -5,6 +5,10 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.errors import AppError
 from app.core.logging import get_logger
+from app.core.runtime import Runtime, get_runtime
+from app.jobs.manager import ACTIVE_STATUSES
+from app.models.ifc import IfcModelModel
+from app.models.job import JobModel
 from app.models.project import ProjectModel
 from app.modules.projects import service
 from app.modules.projects.schemas import ProjectCreate, ProjectResponse, ProjectUpdate
@@ -62,11 +66,22 @@ def update_project(project_id: int, project_in: ProjectUpdate, db: Session = Dep
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_project(project_id: int, db: Session = Depends(get_db)):
+def delete_project(project_id: int, db: Session = Depends(get_db), runtime: Runtime = Depends(get_runtime)):
+    """Exclui o projeto, seus dados (em cascata) e os arquivos IFC dele na pasta de uploads.
+
+    Recusa a exclusão enquanto houver tarefa ativa do projeto. Arquivos fora da pasta de
+    uploads ou usados por outro projeto nunca são apagados.
+    """
     project = service.get_project_or_404(db, project_id)
+    active = db.query(JobModel).filter(JobModel.project_id == project_id, JobModel.status.in_(ACTIVE_STATUSES)).count()
+    if active:
+        raise AppError(409, "Há tarefas em andamento neste projeto. Aguarde ou cancele-as antes de excluí-lo.",
+                       code="project_busy", details={"active_jobs": active})
+    paths = [p for (p,) in db.query(IfcModelModel.file_path).filter(IfcModelModel.project_id == project_id).all() if p]
     db.delete(project)
     db.commit()
-    logger.info("Projeto %s excluído.", project_id)
+    removed = service.remove_orphan_upload_files(db, paths, runtime.storage.uploads_dir)
+    logger.info("Projeto %s excluído (%s arquivo(s) IFC removido(s)).", project_id, removed)
 
 
 @router.post("/{project_id}/duplicate", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
