@@ -102,7 +102,7 @@ Frontend, motor CPM/PERT e IA: **sem alteração**.
 | Motor da demonstração | 9/9 |
 | Build de produção | OK |
 | Playwright (serviço real + interface) | 8/8 |
-| CI (Ubuntu, Windows, frontend) | Ver seção 5 |
+| CI (Ubuntu, Windows, frontend) | Aprovado (seção 5) |
 
 Testes novos (21):
 - **Modelos e revisões (7):** metadados, vigência só após sucesso, duplicata, entradas inválidas, GlobalIds repetidos entre arquivos, candidatos e reagrupamento, edição.
@@ -119,4 +119,13 @@ Testes novos (21):
 - Arquivos IFC usados nesta fase são gerados pelo IfcOpenShell. Os arquivos públicos da buildingSMART e do IfcOpenShell, com verificação de licença, entram na Fase 2, junto com a extração.
 
 ## 5. CI
-Aguardando a execução do commit desta fase.
+
+O código desta fase (commit `9930837`, execução 44332281525) passou em todos os jobs:
+
+| Job | Resultado |
+|---|---|
+| Backend Ubuntu (Python 3.12.16) | **100/100** |
+| Backend Windows (Python 3.12.10) | **100/100**: valida no Windows o processo separado, a remoção de arquivos e as migrações |
+| Frontend | Unitários e motor da demonstração aprovados, *type check* e build OK, site do Pages montado, **Playwright 8/8** |
+
+O commit do relatório (`e2fa002`, execução 44332498886) também passou.
