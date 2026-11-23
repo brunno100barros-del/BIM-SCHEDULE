@@ -61,7 +61,14 @@ export const IfcViewer: React.FC<IfcViewerProps> = ({ ifcUrl, requestHeaders }) 
     }, (event) => {
       if (event.total > 0) setLoading(true);
     }, (loadError) => {
-      if (!disposed) { setLoading(false); setError(`Falha ao carregar o IFC: ${String(loadError)}`); }
+      if (!disposed) {
+        setLoading(false);
+        const text = String(loadError);
+        // web-ifc-three falha ao mesclar uma lista vazia de geometrias quando o arquivo não tem representação 3D.
+        setError(/reading 'index'/.test(text)
+          ? 'Este arquivo IFC não contém geometria 3D visualizável (os elementos e propriedades foram importados normalmente).'
+          : `Falha ao carregar o IFC: ${text}`);
+      }
     });
 
     const animate = () => {

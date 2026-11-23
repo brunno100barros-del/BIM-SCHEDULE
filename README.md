@@ -28,6 +28,12 @@ Aplicação web do ecossistema BIMOFFICE para organizar EAP, atividades, preced�
 - Histórico e snapshots locais, incluindo dados financeiros, calendário, recursos e vínculos IFC.
 - Exportação SpreadsheetML compatível com Excel e impressão do navegador para PDF.
 
+## Aplicativo desktop (Windows)
+
+Execute `install.bat` e depois `build-desktop.bat`. O app fica em `desktop\dist\win-unpacked\BIM SCHEDULE.exe`,
+com atalho **BIM SCHEDULE** na Área de Trabalho. Ele inicia o serviço local sozinho, sem terminal.
+Guia de uso: [docs/TUTORIAL-DESKTOP.md](docs/TUTORIAL-DESKTOP.md).
+
 ## Como testar online
 
 1. Abra a GitHub Page: https://brunno100barros-del.github.io/BIM-SCHEDULE/

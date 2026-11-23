@@ -1,5 +1,15 @@
 # Changelog — BIM SCHEDULE
 
+## 0.6.0 desktop — 2026-11-22 (Etapa 4: aplicativo Windows)
+- Novo aplicativo desktop Electron (`desktop/`): protocolo `app://bim-schedule`, serviço local iniciado e encerrado pelo app em porta livre, token por sessão, CORS restrito à origem do app, janela única, menus (pasta de dados/logs, tutorial, Swagger) e tela de reinício caso o serviço caia.
+- Serviço empacotado com PyInstaller (`bim-schedule-service.exe`), incluindo migrações Alembic e IfcOpenShell; tarefas IFC em processo separado funcionando dentro do executável.
+- `build-desktop.bat` gera o app (`desktop\dist\win-unpacked\BIM SCHEDULE.exe`) e cria o atalho na Área de Trabalho.
+- Corrigido: `install.bat` encerrava logo após `npm --version` (faltava `call`).
+- Corrigido: o visualizador 3D nunca carregava (o WASM copiado era do web-ifc 0.0.50, mas o web-ifc-three usa 0.0.39). Mensagem clara para IFC sem geometria.
+- Testes do executável empacotado: `desktop/scripts/smoke-test.cjs` e `viewer-check.cjs`; medição de importação: `ifc_benchmark.py` e `ifc_report.py`.
+- `.gitignore`: modelos IFC reais nunca são versionados (só fixtures de teste).
+- Tutorial: `docs/TUTORIAL-DESKTOP.md`. Relatório: `docs/reports/ETAPA-04-DESKTOP.md`.
+
 ## 0.6.0-dev — 2026-11-17 (Etapa 2: reestruturação da arquitetura)
 - Aplicação React única como experiência principal; removidos a alternância `?connected=1` e o iframe. A demonstração estática foi preservada como referência e continua na raiz do GitHub Pages.
 - Backend reorganizado em módulos por domínio (`app/modules`), com o motor CPM/PERT inalterado e as rotas `/api/v1` preservadas.

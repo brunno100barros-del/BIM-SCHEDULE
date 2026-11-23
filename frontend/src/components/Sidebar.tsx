@@ -1,4 +1,5 @@
 import React from 'react';
+import { getRuntimeConfig } from '../config/runtime';
 import { LayoutDashboard, Box, Network, CalendarDays, Users, GitBranch, Activity, DollarSign, CloudSun, Cpu, ShieldCheck, FolderKanban, ExternalLink } from 'lucide-react';
 
 interface SidebarProps {
@@ -59,7 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentModule, onSelectModule,
       <a href="./demo.html" target="_blank" rel="noopener" className="text-[11px] text-slate-400 hover:text-slate-200 inline-flex items-center gap-1">
         <ExternalLink className="w-3 h-3" />Demonstração (dados fictícios)
       </a>
-      <div><span className="text-[10px] text-slate-500 font-mono">v{version ?? '—'} · Desenvolvimento</span></div>
+      <div><span className="text-[10px] text-slate-500 font-mono">v{version ?? '—'} · {getRuntimeConfig().mode === 'desktop' ? 'Aplicativo desktop' : 'Desenvolvimento'}</span></div>
     </div>
   </aside>
 );

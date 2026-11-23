@@ -1,6 +1,6 @@
 # Aplicativo Windows — avaliação e estratégia
 
-Estado: **somente estratégia documentada**. O instalador e a casca desktop **não** foram implementados na Etapa 2.
+Estado: **casca Electron implementada na Etapa 4** (`desktop/`, ver `docs/reports/ETAPA-04-DESKTOP.md` e `docs/TUTORIAL-DESKTOP.md`). Distribuição como pasta (`win-unpacked`); instalador NSIS configurado (`npm run dist:installer`), mas ainda não validado. Assinatura de código e atualização automática continuam pendentes.
 
 ## 1. Requisitos
 

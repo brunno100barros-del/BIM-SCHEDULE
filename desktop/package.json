@@ -1,0 +1,64 @@
+{
+  "name": "bim-schedule-desktop",
+  "productName": "BIM SCHEDULE",
+  "version": "0.6.0",
+  "description": "BIM SCHEDULE — planejamento e simulação de obras a partir de modelos IFC",
+  "main": "main.cjs",
+  "private": true,
+  "author": "BIM SCHEDULE",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win dir",
+    "dist:installer": "electron-builder --win nsis",
+    "test:smoke": "node scripts/smoke-test.cjs"
+  },
+  "devDependencies": {
+    "electron": "33.4.11",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "br.bimoffice.bimschedule",
+    "productName": "BIM SCHEDULE",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "build/icon.ico",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../frontend/dist",
+        "to": "frontend"
+      },
+      {
+        "from": "service/dist/bim-schedule-service",
+        "to": "service"
+      },
+      {
+        "from": "../docs/TUTORIAL-DESKTOP.md",
+        "to": "docs/TUTORIAL-DESKTOP.md"
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        "dir"
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "BIM SCHEDULE"
+    }
+  },
+  "allowScripts": {
+    "electron@33.4.11": true
+  }
+}

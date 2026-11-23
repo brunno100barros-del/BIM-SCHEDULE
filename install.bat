@@ -22,8 +22,8 @@ if errorlevel 1 (
 )
 
 python -c "import sys; print('Python', sys.version.split()[0])"
-node --version
-npm --version
+call node --version
+call npm --version
 
 echo.
 echo [1/5] Criando ambiente virtual Python...

@@ -18,3 +18,16 @@ frontend/pages-dist/
 # Relatórios do Playwright
 frontend/playwright-report/
 frontend/test-results/
+
+# Aplicativo desktop (Electron + serviço PyInstaller): artefatos gerados
+!desktop/build/
+desktop/dist/
+desktop/release/
+desktop/service/build/
+desktop/service/dist/
+
+# Nunca versionar modelos IFC reais. Só os arquivos sintéticos de teste.
+*.ifc
+*.IFC
+!frontend/tests/e2e/fixtures/*.ifc
+!backend/tests/**/*.ifc
