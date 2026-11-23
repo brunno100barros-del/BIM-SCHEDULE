@@ -47,8 +47,13 @@ def update_activity(act_id: int, data: ActivityUpdate, db: Session = Depends(get
         node = db.query(WbsNodeModel).filter(WbsNodeModel.id == values["wbs_id"], WbsNodeModel.project_id == act.project_id).first()
         if not node:
             raise HTTPException(400, "Nó da EAP não pertence ao projeto da atividade.")
+    duration_changed = "duration" in values and values["duration"] != act.duration
     for key, value in values.items():
         setattr(act, key, value)
+    if duration_changed:
+        # Duração definida pelo usuário: deixa de ser a provisória do gerador automático.
+        from app.models.takeoff import ScheduleGeneratedActivity
+        db.query(ScheduleGeneratedActivity).filter(ScheduleGeneratedActivity.activity_id == act.id)             .update({"provisional": False, "provisional_reason": None})
     db.commit(); db.refresh(act)
     return act
 

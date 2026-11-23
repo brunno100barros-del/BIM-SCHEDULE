@@ -1,5 +1,14 @@
 # Changelog — BIM SCHEDULE
 
+## 0.7.0 — 2026-11-22 (Etapa 4, parte 2: cronograma automático a partir do IFC, sem IA)
+- **Quantitativos por elemento** (tarefa `ifc.quantities`, em processo separado, com progresso e cancelamento): por medida, usa Qto do IFC → Pset do autor com medida tipada → geometria (IfcOpenShell, em paralelo) → contagem. Tudo em SI, com a fonte, o método e o valor de origem de cada medida. Exclui aberturas e conjuntos já quantificados pelas peças; as peças de fachada e escada herdam o tipo do conjunto. Peso do aço = volume × 7850, exceto em seções maciças suspeitas.
+- **Catálogo de serviços editável por projeto** (18 serviços: tipo IFC + material → serviço, unidade, produtividade, duração padrão e precedências). Produtividades começam vazias (sem índices inventados).
+- **Gerador por regras**: EAP nível × serviço (pavimentos do IFC ou faixas de cota quando há um só pavimento), duração = ⌈quantidade ÷ produtividade⌉ ou padrão **provisória**, precedências padrão (mesmo nível, nível anterior), proteção contra ciclos, vínculo automático elemento ↔ atividade e CPM pelo motor existente (inalterado).
+- **Tela "Gerar Cronograma"**: quantitativos por modelo, catálogo editável, pré-visualização editável (incluir, nome, duração) e aceite com substituição da geração anterior. Gantt com a etiqueta "provisória"; editar a duração remove a etiqueta.
+- Lista de elementos do 3D com "Carregar mais" e filtro (antes limitada a 1000).
+- Migração `0004_takeoff_schedule` (somente tabelas novas).
+- Testes: backend 109 (9 novos), e2e 9 (1 novo), teste de fumaça do .exe com 11 verificações.
+
 ## 0.6.0 desktop — 2026-11-22 (Etapa 4: aplicativo Windows)
 - Novo aplicativo desktop Electron (`desktop/`): protocolo `app://bim-schedule`, serviço local iniciado e encerrado pelo app em porta livre, token por sessão, CORS restrito à origem do app, janela única, menus (pasta de dados/logs, tutorial, Swagger) e tela de reinício caso o serviço caia.
 - Serviço empacotado com PyInstaller (`bim-schedule-service.exe`), incluindo migrações Alembic e IfcOpenShell; tarefas IFC em processo separado funcionando dentro do executável.

@@ -113,3 +113,33 @@ test('a demonstração estática continua disponível e identificada', async ({ 
   await page.goto('/demo.html');
   await expect(page.getByText('AMBIENTE DEMONSTRATIVO')).toBeVisible();
 });
+
+test('gera o cronograma a partir do IFC: quantitativos, pré-visualização, aceite e Gantt', async ({ page }) => {
+  test.setTimeout(120_000);
+  const code = unique();
+  await page.goto('/');
+  await createProject(page, 'Gerador E2E', code);
+  const card = page.locator('div').filter({ hasText: code }).filter({ has: page.getByRole('button', { name: /Abrir Projeto/ }) }).last();
+  await card.getByRole('button', { name: /Abrir Projeto/ }).click();
+  await page.getByRole('button', { name: /Modelos IFC/ }).click();
+  await page.locator('input[type="file"]').setInputFiles(resolve(here, 'fixtures/edificio-teste.ifc'));
+  await expect(page.getByText('Processamento IFC concluído.')).toBeVisible();
+
+  await page.getByRole('button', { name: /Gerar Cronograma/ }).click();
+  await expect(page.getByRole('heading', { name: /Gerar cronograma a partir do IFC/ })).toBeVisible();
+  await page.getByRole('button', { name: /Calcular quantitativos dos selecionados/ }).click();
+  await expect(page.locator('[data-testid^="takeoff-status-"]').first()).toHaveText('Concluído', { timeout: 60_000 });
+
+  await page.getByRole('button', { name: /Pré-visualizar cronograma/ }).click();
+  await expect(page.getByTestId('proposal-01-ALV')).toBeVisible();
+  await expect(page.getByTestId('proposal-01-ALV').getByText('provisória')).toBeVisible(); // sem produtividade
+  await page.getByLabel('Duração 01-LAJ').fill('4');
+  await page.getByRole('button', { name: /Aceitar e criar cronograma/ }).click();
+  await expect(page.getByTestId('generator-result')).toContainText('CPM calculado');
+
+  await page.getByRole('button', { name: 'Abrir Gráfico de Gantt' }).click();
+  await expect(page.locator('table').getByText('G1-01-LAJ')).toBeVisible();
+  await expect(page.locator('table').getByText('G1-01-ALV')).toBeVisible();
+  await expect(page.locator('table tr').filter({ hasText: 'G1-01-ALV' }).getByText('provisória')).toBeVisible();
+  await expect(page.locator('table tr').filter({ hasText: 'G1-01-LAJ' }).getByText('provisória')).toHaveCount(0);
+});

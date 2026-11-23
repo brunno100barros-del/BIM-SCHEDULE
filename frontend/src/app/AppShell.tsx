@@ -7,6 +7,7 @@ import { Bim3DModule } from '../modules/bim3d/Bim3DModule';
 import { GanttModule } from '../modules/gantt/GanttModule';
 import { WbsModule } from '../modules/wbs/WbsModule';
 import { DashboardModule } from '../modules/dashboard/DashboardModule';
+import { GeneratorModule } from '../modules/generator/GeneratorModule';
 import { Project } from '../types/project';
 import { SystemStatus } from '../types/api';
 
@@ -47,6 +48,7 @@ export function AppShell({ status, banner }: Props) {
               </div>
               {currentModule === 'dashboard' && <DashboardModule projectId={activeProject.id} projectName={activeProject.name} />}
               {currentModule === 'bim3d' && <Bim3DModule projectId={activeProject.id} />}
+              {currentModule === 'generator' && <GeneratorModule projectId={activeProject.id} onOpenGantt={() => setCurrentModule('gantt')} />}
               {currentModule === 'wbs' && <WbsModule projectId={activeProject.id} />}
               {currentModule === 'gantt' && <GanttModule projectId={activeProject.id} />}
             </>

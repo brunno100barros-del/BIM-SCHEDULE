@@ -1,7 +1,7 @@
 {
   "name": "bim-schedule-desktop",
   "productName": "BIM SCHEDULE",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "BIM SCHEDULE — planejamento e simulação de obras a partir de modelos IFC",
   "main": "main.cjs",
   "private": true,

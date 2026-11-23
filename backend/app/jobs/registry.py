@@ -36,6 +36,12 @@ JOB_KINDS: dict[str, JobKind] = {
         abort_hook="app.modules.ifc.jobs:on_delete_aborted",
         description="Remoção de uma revisão IFC: vínculos, elementos (em lotes) e arquivo.",
     ),
+    "ifc.quantities": JobKind(
+        name="ifc.quantities",
+        target="app.modules.takeoff.jobs:quantities_job",
+        abort_hook="app.modules.takeoff.jobs:on_quantities_aborted",
+        description="Cálculo de quantitativos por elemento (Qto, Psets tipados, geometria e contagem).",
+    ),
     "system.diagnostic": JobKind(
         name="system.diagnostic",
         target="app.jobs.diagnostic:diagnostic_job",

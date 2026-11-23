@@ -8,6 +8,9 @@ from fastapi.testclient import TestClient
 from app.main import create_app
 from conftest import make_settings
 
+# A migração 0003 é testada sobre o upgrade completo até a revisão mais recente.
+HEAD = "0004_takeoff_schedule"
+
 
 SCHEMA_MAIN = Path(__file__).with_name("fixtures_schema_main_8a630a4.sql")
 
@@ -62,7 +65,7 @@ def test_upgrade_0002_to_0003_keeps_every_row_and_creates_models(tmp_path, stamp
     before = build_db_at_0002(db_path, data_dir / "uploads", stamp=stamp)
 
     with TestClient(create_app(make_settings(tmp_path))) as client:
-        assert client.get("/api/v1/system/status").json()["database"]["revision"] == "0003_bim_models"
+        assert client.get("/api/v1/system/status").json()["database"]["revision"] == HEAD
         models = client.get("/api/v1/ifc/project/1/bim-models").json()
         # Cada arquivo existente vira a revisão 1 de um modelo lógico próprio.
         assert [(m["name"], [r["revision_number"] for r in m["revisions"]], m["current_revision_id"]) for m in models] == [
@@ -87,10 +90,10 @@ def test_upgrade_0002_to_0003_keeps_every_row_and_creates_models(tmp_path, stamp
         assert hashlib.sha256(f.read_bytes()).hexdigest() == digest  # arquivos intactos
     conn = sqlite3.connect(db_path)
     try:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchall() == [("0003_bim_models",)]
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchall() == [(HEAD,)]
     finally:
         conn.close()
-    backups = list((data_dir / "backups").glob("*antes-0003_bim_models.db"))
+    backups = list((data_dir / "backups").glob(f"*antes-{HEAD}.db"))
     assert len(backups) == 1
     conn = sqlite3.connect(backups[0])
     try:
@@ -123,9 +126,9 @@ def test_fresh_database_is_stamped_and_not_remigrated(tmp_path):
     db = tmp_path / "data" / "bim_schedule.db"
     conn = sqlite3.connect(db)
     try:
-        assert conn.execute("SELECT version_num FROM alembic_version").fetchall() == [("0003_bim_models",)]
+        assert conn.execute("SELECT version_num FROM alembic_version").fetchall() == [(HEAD,)]
     finally:
         conn.close()
-    assert first["from"] is None and first["to"] == "0003_bim_models"
-    assert second == {"from": "0003_bim_models", "to": "0003_bim_models", "backup": None}
+    assert first["from"] is None and first["to"] == HEAD
+    assert second == {"from": HEAD, "to": HEAD, "backup": None}
     assert not list((tmp_path / "data" / "backups").glob("*.db"))

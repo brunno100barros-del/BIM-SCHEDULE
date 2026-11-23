@@ -1,6 +1,6 @@
 import React from 'react';
 import { getRuntimeConfig } from '../config/runtime';
-import { LayoutDashboard, Box, Network, CalendarDays, Users, GitBranch, Activity, DollarSign, CloudSun, Cpu, ShieldCheck, FolderKanban, ExternalLink } from 'lucide-react';
+import { LayoutDashboard, Box, Network, CalendarDays, Users, GitBranch, Activity, DollarSign, CloudSun, Cpu, ShieldCheck, FolderKanban, ExternalLink, Wand2 } from 'lucide-react';
 
 interface SidebarProps {
   currentModule: string;
@@ -16,6 +16,7 @@ const MENU: MenuItem[] = [
   { id: 'projects', label: 'Projetos', icon: FolderKanban, available: true },
   { id: 'dashboard', label: 'Visão Geral', icon: LayoutDashboard, available: true, needsProject: true },
   { id: 'bim3d', label: 'Modelos IFC & 3D', icon: Box, available: true, needsProject: true },
+  { id: 'generator', label: 'Gerar Cronograma', icon: Wand2, available: true, needsProject: true },
   { id: 'wbs', label: 'EAP & Atividades', icon: Network, available: true, needsProject: true },
   { id: 'gantt', label: 'Gráfico de Gantt & CPM', icon: CalendarDays, available: true, needsProject: true },
   { id: 'resources', label: 'Equipes & Recursos', icon: Users, available: false },

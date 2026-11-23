@@ -1,6 +1,6 @@
 # BIM SCHEDULE — Tutorial do aplicativo desktop (Windows)
 
-Versão 0.6.0 (Etapa 4). O aplicativo abre como um programa normal do Windows: **não precisa de terminal,
+Versão 0.7.0 (Etapa 4: app desktop + cronograma automático a partir do IFC). O aplicativo abre como um programa normal do Windows: **não precisa de terminal,
 navegador nem `start.bat`**. O serviço local (Python/IfcOpenShell) é iniciado e encerrado pelo próprio app.
 
 ---
@@ -47,7 +47,9 @@ O app desktop e a versão web (`start.bat`) usam **a mesma pasta de dados**, ent
 ### 3.1 Projetos de teste já criados
 Já existem 8 projetos com código `TST-…`, criados nos testes com os seus IFCs:
 `TST-ESAP` (multidisciplinar: ARQ, EST, HID e estrutura metálica), `TST-SENAC`, `TST-XIMENES`, `TST-LEONE`,
-`TST-MODEL-RJ`, `TST-ESTMET-RJ`, `TST-VOLUM` e `TST-PORTAL`. Você pode abri-los direto ou apagá-los.
+`TST-MODEL-RJ`, `TST-ESTMET-RJ`, `TST-VOLUM` e `TST-PORTAL`. Todos já têm **quantitativos calculados** e um
+**cronograma gerado** (veja o Gantt). Comece pelo `TST-SENAC` (Revit, 6 pavimentos) ou pelo `TST-ESAP`.
+Você pode abri-los direto, gerar de novo ou apagá-los.
 
 ### 3.2 Criar um projeto
 1. Na tela **Projetos**, clique em **Novo Projeto**.
@@ -69,12 +71,51 @@ Já existem 8 projetos com código `TST-…`, criados nos testes com os seus IFC
 3. Se o arquivo não tiver geometria 3D, aparece a mensagem "Este arquivo IFC não contém geometria 3D
    visualizável". Os elementos e as propriedades continuam importados.
 
-### 3.5 EAP e atividades
+### 3.5 Gerar o cronograma automaticamente a partir do IFC (novo)
+No menu lateral, abra **Gerar Cronograma**. São três passos na mesma tela:
+
+1. **Modelos e quantitativos.** Marque os modelos (os vigentes já vêm marcados) e clique em
+   **Calcular quantitativos dos selecionados**. O cálculo roda em segundo plano, com progresso por modelo.
+   Tempos medidos com os seus arquivos: de 2 a 21 s na maioria; ~80 s no ARQ de 139 MB. A seta ao lado do nome
+   mostra os totais por tipo IFC (quantidade, m³, m², m, kg) e a **fonte** de cada medida:
+   - `ifc_qto`: quantitativos do próprio IFC (Qto_*/BaseQuantities). Nenhum dos seus arquivos tem.
+   - `author_pset`: propriedade do programa de autoria com unidade definida (ex.: comprimento de tubos do AltoQi).
+   - `geometry`: calculada pela geometria do elemento.
+   - `count`: 1 por elemento.
+
+   Todas as quantidades ficam em **m, m², m³ e kg**, convertidas da unidade do arquivo (cm e mm inclusive).
+2. **Serviços, regras e produtividades** (clique para abrir). Esta tabela diz qual tipo IFC vira qual serviço,
+   a unidade, a **produtividade por dia**, a duração padrão e os predecessores. As produtividades começam
+   **vazias**: o programa não inventa índices. Preencha as que você tem (ex.: alvenaria em m²/dia). A alteração
+   é salva ao sair do campo. **Restaurar padrão** volta ao catálogo inicial.
+3. **Pré-visualizar e revisar.** Escolha os **níveis**:
+   - *Automático*: usa os pavimentos do IFC; quando o modelo tem um só pavimento (Advance Steel, SteelX, CYPE),
+     usa faixas de cota.
+   - *Pavimentos do IFC*.
+   - *Faixas de cota*, com a altura da faixa em metros.
+
+   Clique em **Pré-visualizar cronograma**. A tabela mostra, por nível, cada atividade com quantidade, cobertura
+   (% dos elementos com medida), produtividade, duração e situação. A situação é **calculada** (quantidade ÷
+   produtividade) ou **provisória**, com o motivo: sem produtividade, sem quantidade ou quantidade parcial.
+   Você pode desmarcar atividades, renomear e mudar durações. Uma duração digitada deixa de ser provisória.
+   "Outros elementos (a classificar)" vem desmarcado.
+4. Clique em **Aceitar e criar cronograma**. O app cria a EAP (geração → níveis), as atividades (código `G1-…`),
+   as precedências padrão e os vínculos de cada atividade com os seus elementos IFC, e calcula o CPM.
+   Com **Substituir o cronograma gerado anteriormente** marcado, a geração anterior é removida. Atividades criadas
+   à mão nunca são tocadas.
+5. Clique em **Abrir Gráfico de Gantt**. As atividades com duração provisória aparecem com a etiqueta
+   **provisória**. Ao editar a duração no Gantt, a etiqueta some.
+
+> **Prazo contratual.** Um projeto criado pela tela recebe, por padrão, data final = início + 365 dias. O CPM
+> mede as folgas até esse prazo, então um cronograma bem mais curto pode aparecer **sem atividades críticas**.
+> Para ver o caminho crítico do próprio cronograma, apague ou ajuste a data final do projeto.
+
+### 3.6 EAP e atividades
 1. **EAP & Atividades**: monte a estrutura analítica e as atividades.
 2. Para vincular um elemento IFC a uma atividade: em **Modelos IFC & 3D**, selecione o elemento na lista,
    escolha a atividade em "Associar elemento selecionado à atividade" e clique em **Vincular GlobalId**.
 
-### 3.6 Cronograma (CPM)
+### 3.7 Cronograma manual (CPM)
 1. **Gráfico de Gantt & CPM** → **Nova atividade**: código (ex.: `A-01`), nome e duração em dias → **Adicionar atividade**.
 2. **Nova precedência**: escolha a predecessora e a sucessora → **Adicionar relação**.
 3. Clique em **Calcular CPM**. O motor do serviço calcula datas, folgas e caminho crítico
@@ -102,7 +143,9 @@ Já existem 8 projetos com código `TST-…`, criados nos testes com os seus IFC
 | "Falha ao iniciar" ao abrir | Leia `%LOCALAPPDATA%\BIM-SCHEDULE\logs\desktop-service.log`. Confira se outra janela do app ou o `start.bat` não está aberto. |
 | "O serviço local foi encerrado inesperadamente" | Clique em **Reiniciar serviço**. Se repetir, envie o log acima. |
 | IFC fica em "Aguardando processamento" | Só um IFC é processado por vez. Aguarde a fila. |
-| A lista mostra só 1000 elementos | É um limite conhecido da tela (todos os elementos estão no banco). Será corrigido. |
+| A lista mostra "1000 de N" elementos | Use **Carregar mais 1000** no fim da lista ou o campo de filtro (nome, tipo ou GlobalId). |
+| Muitas atividades "provisórias" | Normal enquanto não houver produtividade cadastrada: preencha em **Gerar Cronograma → 2. Serviços**. |
+| Quantidade "0" ou cobertura baixa | O elemento não tem geometria legível nem Pset com unidade. A duração fica provisória. Confira a exportação do IFC. |
 | Antivírus bloqueia `bim-schedule-service.exe` | Libere a pasta `desktop\dist\win-unpacked` (executável não assinado). |
 
 ---
@@ -117,6 +160,7 @@ Já existem 8 projetos com código `TST-…`, criados nos testes com os seus IFC
 | Rodar o desktop sem empacotar (usa a `.venv`) | `cd desktop` → `npm start` (exige `frontend\dist`, gerado por `npm run build`) |
 | Teste de fumaça do .exe empacotado (pasta de dados temporária) | `cd desktop` → `node scripts\smoke-test.cjs [arquivo.ifc]` |
 | Conferir o 3D de todos os projetos `TST-` | `cd desktop` → `node scripts\viewer-check.cjs` |
+| Validar quantitativos + gerador nos projetos `TST-` | `.venv\Scripts\python.exe desktop\scripts\generator_validation.py --out resultado.json --apply` |
 | Medir importação de IFCs (tempo e memória) | `.venv\Scripts\python.exe desktop\scripts\ifc_benchmark.py --plan plano.json --out resultado.json` |
 
 Arquitetura: `docs/architecture/WINDOWS_DESKTOP.md`. Relatório da etapa: `docs/reports/ETAPA-04-DESKTOP.md`.

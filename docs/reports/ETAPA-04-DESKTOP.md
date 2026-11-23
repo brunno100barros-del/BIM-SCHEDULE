@@ -73,3 +73,77 @@ Principais conclusões:
 - Se o processo do Electron for morto à força (sem passar pelo `before-quit`), o serviço pode ficar órfão até ser encerrado manualmente.
 - A memória da janela não volta ao patamar inicial ao trocar de modelo no 3D (~1,7 GB → ~0,95 GB).
 - `npm audit` aponta vulnerabilidades em dependências de desenvolvimento (Electron 33 e electron-builder 25). Avaliar a atualização antes de distribuir.
+
+---
+
+# Parte 2 — Cronograma automático a partir do IFC (sem IA)
+
+Implementa os itens (a), (b) e (c) da proposta: quantitativos rastreáveis, gerador por regras e a tela
+"Gerar Cronograma". O motor CPM/PERT (`backend/app/engine/cpm_pert.py`) **não foi alterado**.
+
+## 6. O que foi feito
+
+| Item | Arquivos |
+|---|---|
+| Tabelas novas: `ifc_takeoff_runs`, `ifc_element_takeoff`, `schedule_services`, `schedule_generations` e `schedule_generated_activities`. Migração só aditiva. | `backend/app/models/takeoff.py`, `backend/migrations/versions/0004_takeoff_schedule.py` |
+| Extrator de quantitativos. Ordem das fontes: Qto → Pset tipado → geometria → contagem. Resultado em SI, com fonte, método e valor de origem por medida. | `backend/app/modules/takeoff/extractor.py` |
+| Tarefa `ifc.quantities` (processo separado, progresso, cancelamento, *abort hook*) | `backend/app/modules/takeoff/jobs.py`, `backend/app/jobs/registry.py` |
+| Catálogo padrão de 18 serviços e regras de material (aço/concreto) | `backend/app/modules/takeoff/catalog.py` |
+| Gerador: níveis (pavimentos ou faixas de cota), durações, precedências, proteção contra ciclos | `backend/app/modules/takeoff/generator.py` |
+| Aplicação: EAP, atividades, precedências, vínculos com elementos, CPM e substituição da geração anterior | `backend/app/modules/takeoff/service.py`, `router.py` |
+| Rotas `/api/v1/takeoff/*` e `/api/v1/schedule-generator/*` | `backend/app/api/v1/api.py` |
+| Duração editada pelo usuário deixa de ser provisória | `backend/app/modules/planning/router.py` |
+| Tela "Gerar Cronograma", etiqueta "provisória" no Gantt, paginação e filtro dos elementos | `frontend/src/modules/generator/`, `services/generator.ts`, `modules/gantt/`, `modules/bim3d/` |
+| Validação com os projetos de teste | `desktop/scripts/generator_validation.py` |
+
+Decisões:
+- **Sem índices inventados.** As produtividades começam vazias. Sem produtividade, a duração é a padrão do
+  serviço e fica marcada como provisória, com o motivo.
+- **Pset só com medida tipada** (IfcLengthMeasure, IfcAreaMeasure, IfcVolumeMeasure, IfcMassMeasure). Valores
+  `IfcReal` são ignorados, porque a unidade seria suposição.
+- **Área geométrica:** volume ÷ espessura nos elementos delgados (exata em paredes e lajes extrudadas); nos demais,
+  metade da área superficial. **Comprimento:** maior dimensão da caixa local.
+- **Peso do aço:** volume × 7850 kg/m³, mas não quando volume ÷ comprimento > 0,06 m². Nos testes, vigas TQS
+  com material "ASTM A36" e seção maciça de 0,17 m² teriam gerado 16 t de aço fictício.
+- **Conjuntos:** conjuntos com peças (`IfcElementAssembly`, `IfcCurtainWall`, `IfcStair`…) não são somados; as
+  peças são. Assim se evita a contagem dupla que o SteelX gerava. As peças de fachada e escada herdam o tipo do
+  conjunto para as regras.
+
+## 7. Testes (saídas reais)
+
+| Suíte | Resultado |
+|---|---|
+| Backend `pytest -q` | **109 passed** (100 anteriores + 9 novos) |
+| Frontend `vitest` / `node --test` | **12 passed** / **9 passed** |
+| Playwright e2e | **9 passed** (novo: quantitativos → prévia → edição → aceite → Gantt com "provisória") |
+| Fumaça do .exe empacotado (IFC real de 2,2 MB e de 32 MB) | **11/11**, incluindo quantitativos, geração e Gantt |
+| Visualizador 3D nos 11 IFCs reais | 10/11. O modelo B não tem geometria, como já registrado na parte 1. |
+
+## 8. Validação com os 11 IFCs reais (serviço empacotado)
+
+| Modelo | Quantitativos | Elementos com geometria | Níveis (modo) | Atividades criadas | Precedências | Vínculos | CPM |
+|---|---|---|---|---|---|---|---|
+| A (CYPE) | 2,1 s | 146/146 | 2 (faixas) | 2 | 1 | 146 | 10 d |
+| B (plugin) | 1,1 s | 0/9 | 1 (faixas) | 1 | 0 | 9 | 5 d |
+| C+D+E+F (multidisciplinar) | 2,7 + 21,5 + 6,6 + 81,2 s | 15.865/15.875 | 14 (pavimentos) | 63 | 112 | 14.713 | 160 d |
+| G (SteelX) | 10,8 s | 2648/2648 | 3 (faixas) | 4 | 3 | 2.648 | 15 d |
+| H (Advance Steel) | 8,4 s | 474/649 | 4 (faixas) | 7 | 6 | 649 | 20 d |
+| I (Advance Steel) | 13,2 s | 968/1394 | 4 (faixas) | 7 | 6 | 1.390 | 20 d |
+| J (Revit) | 20,7 s | 2908/2908 | 6 (pavimentos) | 41 | 51 | 2.499 | 50 d |
+| K (TQS) | 3,7 s | 594/594 | 5 (pavimentos) | 14 | 21 | 594 | 65 d |
+
+Todas as durações ficaram provisórias (catálogo sem produtividade). Exemplos de quantidades:
+- Eberick: fundações 93,5 m³; pilares 29,0 m³ e vigas 24,9 m³ no nível de fundação.
+- AltoQi Builder: 1.085 m de tubulação no térreo. O comprimento veio do Pset do autor, convertido de cm para m.
+- Revit (J): alvenaria de ~1.300 m² por pavimento.
+
+Limitações observadas:
+- **Projeto com vários modelos em modo "pavimentos":** os nomes de pavimento de cada programa não coincidem
+  ("TÉRREO", "Nível 1", "Default Storey"), então surgem 14 níveis intercalados por cota. Para modelos de
+  programas diferentes, o modo "faixas de cota" dá uma EAP mais coerente. Está documentado no tutorial.
+- **Advance Steel IFC2X3:** ~30% dos elementos (sobretudo fixadores) sem geometria legível. A ligação é medida por
+  contagem, sem perda. Os perfis sem geometria ficam sem peso, e a cobertura parcial é sinalizada.
+- **Revit:** "Lajes e pisos" inclui pisos de acabamento modelados como `IfcSlab` (11.820 m² no nível 1 do ARQ).
+  O usuário pode separar ajustando os tipos e as regras no catálogo.
+- O CPM mede as folgas até o prazo contratual do projeto. Com a data final padrão da tela (+365 dias), o
+  cronograma gerado pode não ter atividades críticas. A tela explica isso.

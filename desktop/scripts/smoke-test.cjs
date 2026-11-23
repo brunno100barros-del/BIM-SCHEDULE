@@ -75,7 +75,7 @@ function serviceProcesses() {
     const failedJob = page.locator('[aria-live="polite"]').filter({ hasText: 'Processamento IFC' }).getByText(/Falhou|Falha|Erro/);
     await done.or(failedJob).first().waitFor({ timeout: 30 * 60_000 });
     if (!(await done.isVisible())) throw new Error(`Processamento IFC falhou: ${await failedJob.first().textContent()}`);
-    const count = await page.getByText(/Elementos \(\d+\)/).first().textContent();
+    const count = await page.getByText(/Elementos \(\d+( de \d+)?\)/).first().textContent();
     step('Importa e processa IFC em processo separado', true, `${path.basename(ifc)}: ${count}, ${((Date.now() - t1) / 1000).toFixed(1)} s`);
 
     // Visualizador 3D
@@ -107,6 +107,27 @@ function serviceProcesses() {
     await page.getByText(/Duração calculada: 7 dias/).waitFor();
     await page.screenshot({ path: path.join(shots, 'gantt-cpm.png') });
     step('Calcula CPM pelo motor do serviço', true, 'Duração calculada: 7 dias');
+
+    // Gerador de cronograma: quantitativos → pré-visualização → aceite → Gantt
+    await page.getByRole('button', { name: /Gerar Cronograma/ }).click();
+    const t3 = Date.now();
+    await page.getByRole('button', { name: /Calcular quantitativos dos selecionados/ }).click();
+    const status = page.locator('[data-testid^="takeoff-status-"]').first();
+    await status.filter({ hasText: /Concluído|Falhou/ }).waitFor({ timeout: 30 * 60_000 });
+    const takeoffOk = (await status.textContent()).includes('Concluído');
+    step('Calcula quantitativos (tarefa ifc.quantities)', takeoffOk, `${((Date.now() - t3) / 1000).toFixed(1)} s`);
+    await page.getByRole('button', { name: /Pré-visualizar cronograma/ }).click();
+    await page.locator('[data-testid^="proposal-"]').first().waitFor({ timeout: 120_000 });
+    const proposalRows = await page.locator('[data-testid^="proposal-"]').count();
+    await page.screenshot({ path: path.join(shots, 'gerador-previa.png'), fullPage: true });
+    await page.getByRole('button', { name: /Aceitar e criar cronograma/ }).click();
+    await page.getByTestId('generator-result').waitFor({ timeout: 300_000 });
+    const resultText = (await page.getByTestId('generator-result').textContent()).replace(/\s+/g, ' ');
+    step('Gera o cronograma a partir do IFC e calcula o CPM', /CPM calculado/.test(resultText), `${proposalRows} atividades propostas; ${resultText.slice(0, 160)}`);
+    await page.getByRole('button', { name: 'Abrir Gráfico de Gantt' }).click();
+    await page.locator('table').getByText(/^G1-/).first().waitFor();
+    await page.screenshot({ path: path.join(shots, 'gantt-gerado.png') });
+    step('Gantt mostra as atividades geradas', true);
 
     const relevant = consoleErrors.filter((e) => !/favicon/i.test(e));
     step('Sem erros de JavaScript no console', relevant.length === 0, relevant.slice(0, 5).join(' | '));
